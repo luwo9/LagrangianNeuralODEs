@@ -11,13 +11,21 @@ class NeuralNetwork(nn.Module):
     A simple feedforward neural network with ReLU activation functions.
     """
 
-    def __init__(self, input_size: int, hidden_sizes: list[int], output_size: int, activation_fn: nn.Module = nn.ReLU):
+    def __init__(self, input_size: int, hidden_sizes: list[int], output_size: int, activation_fn: nn.Module = nn.ReLU) -> None:
         """
         Initialize the neural network.
 
-        :param input_size: int
-        :param hidden_sizes: list of int
-        :param output_size: int
+        Parameters
+        ----------
+
+        input_size : int
+            The size/dimension of the input.
+        hidden_sizes : list[int]
+            The sizes of the hidden layers.
+        output_size : int
+            The size/dimension of the output.
+        activation_fn : nn.Module, default=nn.ReLU
+            The activation function to use between the linear layers.
         """
         super().__init__()
 
@@ -34,8 +42,17 @@ class NeuralNetwork(nn.Module):
         """
         Forward pass.
 
-        :param x: torch.Tensor
-        :return: torch.Tensor
+        Parameters
+        ----------
+
+        x : torch.Tensor
+            The input to the neural network.
+        
+        Returns
+        -------
+
+        torch.Tensor
+            The output of the neural network.
         """
         return self._layers(x)
     
