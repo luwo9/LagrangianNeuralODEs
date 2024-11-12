@@ -74,8 +74,9 @@ class SolvedSecondOrderNeuralODE(nn.Module):
         x_and_xdot_0 = torch.cat([x_0, xdot_0], dim=1)
 
         x_and_xdot = self._odeint(self._neural_ode, x_and_xdot_0, t, **self._odeint_kwargs)
+        x_and_xdot = x_and_xdot.permute(1, 0, 2) # timesteps at second dimension
 
-        x, xdot = torch.split(x_and_xdot, dim, dim=1)
+        x, xdot = torch.split(x_and_xdot, dim, dim=2)
         return x, xdot
     
     def second_order_function(self, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor) -> torch.Tensor:

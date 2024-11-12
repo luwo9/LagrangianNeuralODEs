@@ -39,15 +39,20 @@ class SecondOrderNeuralODE(nn.Module, ABC):
         Returns
         -------
 
-        torch.Tensor
+        torch.Tensor, shape (n_batch, 2*n_dim)
             The derivative of the state at time t.
         """
         dim = x_and_xdot.shape[1] // 2
-        x, xdot = torch.split(x_and_xdot, dim, dim=1)
+        
+        # Prepare shape for the second order function
+        n_batch = x_and_xdot.shape[0]
+        t = t.repeat(n_batch, 1)
+        x_and_xdot = x_and_xdot.unsqueeze(1)
 
-        xdotdot = self.second_order_function(t, x, xdot)
-
+        x, xdot = torch.split(x_and_xdot, dim, dim=2) # dim=2 as unsqueezed
+        xdotdot = self.second_order_function(t, x, xdot).squeeze(1)
         x_and_xdot_dot = torch.cat([xdot, xdotdot], dim=1)  # = sdot = d/dt x_and_xdot
+
         return x_and_xdot_dot
 
     @abstractmethod
