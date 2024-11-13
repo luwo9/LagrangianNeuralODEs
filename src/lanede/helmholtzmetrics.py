@@ -10,6 +10,7 @@ References
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 
 import torch
 import torch.nn as nn
@@ -29,14 +30,14 @@ class HelmholtzMetric(nn.Module, ABC):
     """
 
     @abstractmethod
-    def forward(self, f: nn.Module, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor) -> torch.Tensor:
+    def forward(self, f: Callable, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor) -> torch.Tensor:
         """
         Computes the metric for the Helmholtz conditions for given points in time and state.
 
         Parameters
         ----------
 
-        f : nn.Module
+        f : Callable
             The function $f^\\ast(t, x, \dot{x})$ of the second order ODE $\ddot{x} = f^\\ast(t, x, \dot{x})$.
         t : torch.Tensor, shape (n_batch, n_steps)
             The time points at which the Helmholtz conditions should be evaluated.
@@ -53,6 +54,34 @@ class HelmholtzMetric(nn.Module, ABC):
         """
         pass
 
+    @abstractmethod
+    def evaluate_helmholtz_conditions(self, f: Callable, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor, scalar: bool = True) -> tuple[torch.Tensor, ...]:
+        """
+        Evaluate the Helmholtz conditions for a given second order ODE
+        at given points in time and state. Returns individial metrics
+        for the Helmholtz conditions. Depending on `scalar`,
+        the resulting tensors contain metric for each point or
+        are averaged over all points.
+
+        Parameters
+        ----------
+
+        f : Callable
+            The function $f^\\ast(t, x, \dot{x})$ of the second order ODE $\ddot{x} = f^\\ast(t, x, \dot{x})$.
+        t : torch.Tensor, shape (n_batch, n_steps)
+            The time points at which the Helmholtz conditions should be evaluated.
+        x : torch.Tensor, shape (n_batch, n_steps, n_dim)
+            The states at time steps t.
+        xdot : torch.Tensor, shape (n_batch, n_steps, n_dim)
+            The derivative of the state at time steps t.
+
+        Returns
+        -------
+
+        tuple[torch.Tensor, ...] shapes (n_batch, n_steps) or scalars
+            The metrics for the Helmholtz conditions evaluated at the given points.
+        """
+
 
 class TryLearnDouglas(HelmholtzMetric):
     """
@@ -68,14 +97,14 @@ class TryLearnDouglas(HelmholtzMetric):
     Douglas J. (1939). Solution of the Inverse Problem of the Calculus of Variations. Proceedings of the National Academy of Sciences of the United States of America, 25(12), 631-637. https://doi.org/10.1073/pnas.25.12.631
     """
 
-    def __init__(self, neural_network: nn.Module, h_2_weight: float = 1.0, h_3_weight: float = 1.0, non_singular_weight: float = 0.1) -> None:
+    def __init__(self, neural_network: Callable, h_2_weight: float = 1.0, h_3_weight: float = 1.0, non_singular_weight: float = 0.1) -> None:
         """
         Initializes the metric.
 
         Parameters
         ----------
 
-        neural_network : nn.Module
+        neural_network : Callable
             The neural network to learn the g matrix. Must map 2n_dim+1
             to n_dim(n_dim+1)/2, where n_dim is the dimension of
             the state x.
@@ -103,7 +132,7 @@ class TryLearnDouglas(HelmholtzMetric):
         self._h_3_weight = h_3_weight
         self._non_singular_weight = non_singular_weight
 
-    def forward(self, f: nn.Module, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor) -> torch.Tensor:
+    def forward(self, f: Callable, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor) -> torch.Tensor:
         """
         Computes the metric for the Helmholtz conditions for given points in time and state.
         Namely, the output of `evaluate_helmholtz_conditions` is weighted and summed.
@@ -111,7 +140,7 @@ class TryLearnDouglas(HelmholtzMetric):
         Parameters
         ----------
 
-        f : nn.Module
+        f : Callable
             The function $f^\\ast(t, x, \dot{x})$ of the second order ODE $\ddot{x} = f^\\ast(t, x, \dot{x})$.
         t : torch.Tensor, shape (n_batch, n_steps)
             The time points at which the Helmholtz conditions should be evaluated.
@@ -133,19 +162,19 @@ class TryLearnDouglas(HelmholtzMetric):
         
         return metric
     
-    def evaluate_helmholtz_conditions(self, f: nn.Module, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor, full_mean: bool = True) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    def evaluate_helmholtz_conditions(self, f: Callable, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor, scalar: bool = True) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Evaluate the Helmholtz conditions for a given second order ODE
         at given points in time and state. Returns the absolute of the
         difference of left and right hand side of the Helmholtz
         conditions.
         Also returns a measure for singularity of the g matrix.
-        Averaged according to full_mean.
+        Averaged according to `scalar`.
 
         Parameters
         ----------
 
-        f : nn.Module
+        f : Callable
             The function $f^\\ast(t, x, \dot{x})$ of the second order ODE,
             $\ddot{x} = f^\\ast(t, x, \dot{x})$,
             which should be evaluated. See Notes for important requirements.
@@ -155,7 +184,7 @@ class TryLearnDouglas(HelmholtzMetric):
             The states at time steps t.
         xdot : torch.Tensor, shape (n_batch, n_steps, n_dim)
             The derivative of the state at time steps t.
-        full_mean : bool, default=True
+        scalar : bool, default=True
             Whether to take the mean over all dimensions or just the
             non-batch dimensions.
 
@@ -208,8 +237,8 @@ class TryLearnDouglas(HelmholtzMetric):
         # H3: dg/dv - dg/dv^T
         helmholtz_3 = g_jacobian_v - g_jacobian_v.transpose(-2, -1)
 
-        # Take mean according to full_mean
-        if full_mean:
+        # Take mean according to "scalar"
+        if scalar:
             dim_h1h2 = (0, 1, 2, 3)
             dim_h3 = (0, 1, 2, 3, 4)
 
@@ -224,7 +253,7 @@ class TryLearnDouglas(HelmholtzMetric):
 
         return helmholtz_1, helmholtz_2, helmholtz_3, loss_non_singular
 
-    def _compute_f_terms(self, f: nn.Module, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    def _compute_f_terms(self, f: Callable, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         # Computes f and its derivatives for the Helmholtz conditions,
         # namely f, df/dx, df/dv, d/dt df/dv (v=xdot).
         # Uses only a single autograd pass.

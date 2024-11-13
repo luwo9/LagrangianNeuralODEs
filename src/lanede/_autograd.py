@@ -1,5 +1,5 @@
 """Contains helper functions for autograd."""
-from typing import Callable
+from collections.abc import Callable
 from functools import wraps
 
 def restore_dims_from_vmap(func: Callable, batch_over_dims: tuple[int, ...]) -> Callable:
