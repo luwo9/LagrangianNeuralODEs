@@ -280,13 +280,13 @@ class TryLearnDouglas(HelmholtzMetric):
             return jacobian_v, (jacobians, result)
         
         # Returns (d^2d/dtdv (partial), d^2f/dxdv, d^2f/dv^2), ((df/dx, df/dv), f)
-        fn = torch.func.jacrev(double_result2, argnums=(0,1,2), has_aux=True)
+        fn2 = torch.func.jacrev(double_result2, argnums=(0,1,2), has_aux=True)
         # vmap over first two dims as they are batch dims
         # otherwise jacrev would compute the jacobian also w.r.t. the batch dims
-        fn = torch.func.vmap(fn, in_dims=0, out_dims=0)
-        fn = torch.func.vmap(fn, in_dims=0, out_dims=0)
+        fn2 = torch.func.vmap(fn2, in_dims=0, out_dims=0)
+        fn2 = torch.func.vmap(fn2, in_dims=0, out_dims=0)
 
-        double_jacobians, (jacobians, f_values) = fn(t, x, xdot)
+        double_jacobians, (jacobians, f_values) = fn2(t, x, xdot)
         jacobian_tv, jacobian_xv, jacobian_vv = double_jacobians
         jacobian_x, jacobian_v = jacobians
 
@@ -334,21 +334,23 @@ class TryLearnDouglas(HelmholtzMetric):
         fn = torch.func.vmap(fn, in_dims=0, out_dims=0)
         fn = torch.func.vmap(fn, in_dims=0, out_dims=0)
 
-        [*jacobians_vector], g_vector = fn(t, x, xdot)
-        n_dim = x.shape[-1]
+        jacobians_vector, g_vector = fn(t, x, xdot)
 
         # Assemble matrices from free parameters (vector).
+        n_dim = x.shape[-1]
         g = self._assemble_symmetric(g_vector, n_dim)
 
-        jacobians = []
-        # Maybe more efficient: perform code in for loop on stacked
-        # tensors and then split again.
-        for jacobian in jacobians_vector:
-            # Put derivatives before vector components.
+        jacobian_t_vector = jacobians_vector[0]
+        jacobians = [self._assemble_symmetric(jacobian_t_vector, n_dim)]
+
+        # _asemble_symmetric expects shape (..., n_dim*(n_dim+1)/2), but
+        # jacobians are (...,n_dim*n_dim(n_dim+1)/2, n_dim) so permute
+        # before and after call.
+        for jacobian in jacobians_vector[1:]:
             jacobian = jacobian.permute(0, 1, 3, 2)
             jacobian = self._assemble_symmetric(jacobian, n_dim)
-            # Put derivatives back to the end.
             jacobian = jacobian.permute(0, 1, 3, 4, 2)
+
             jacobians.append(jacobian)
 
         jacobian_t, jacobian_x, jacobian_v = jacobians
