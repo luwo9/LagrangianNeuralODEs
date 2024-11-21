@@ -11,7 +11,7 @@ class NeuralNetwork(nn.Module):
     A simple feedforward neural network with ReLU activation functions.
     """
 
-    def __init__(self, input_size: int, hidden_sizes: list[int], output_size: int, activation_fn: nn.Module = nn.ReLU) -> None:
+    def __init__(self, input_size: int, hidden_sizes: list[int], output_size: int, activation_fn: type[nn.Module] = nn.ReLU) -> None:
         """
         Initialize the neural network.
 
