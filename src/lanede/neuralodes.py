@@ -50,8 +50,8 @@ class SecondOrderNeuralODE(nn.Module, ABC):
         x_and_xdot = x_and_xdot.unsqueeze(1)
 
         x, xdot = torch.split(x_and_xdot, dim, dim=2) # dim=2 as unsqueezed
-        xdotdot = self.second_order_function(t, x, xdot).squeeze(1)
-        x_and_xdot_dot = torch.cat([xdot, xdotdot], dim=1)  # = sdot = d/dt x_and_xdot
+        xdotdot = self.second_order_function(t, x, xdot)
+        x_and_xdot_dot = torch.cat([xdot, xdotdot], dim=2).squeeze(1)  # = sdot = d/dt x_and_xdot
 
         return x_and_xdot_dot
 
