@@ -8,7 +8,8 @@ import torch.nn as nn
 
 class NeuralNetwork(nn.Module):
     """
-    A simple feedforward neural network with ReLU activation functions.
+    A simple feedforward neural network with linear layers
+    and an activation function.
     """
 
     def __init__(self, input_size: int, hidden_sizes: list[int], output_size: int, activation_fn: type[nn.Module] = nn.ReLU) -> None:

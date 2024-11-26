@@ -43,7 +43,7 @@ def restore_dims_from_vmap(func: Callable, batch_over_dims: tuple[int, ...]) -> 
         x = list(x)
         for i in range(len(x)):
             for j in batch_over_dims:
-                x[i] = x[i].unsqueeze(j) # weird interpretation
+                x[i] = x[i].unsqueeze(j)
         computed_result = func(*x)
 
         if not isinstance(computed_result, tuple):
