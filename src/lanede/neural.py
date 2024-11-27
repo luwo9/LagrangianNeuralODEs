@@ -59,4 +59,7 @@ class NeuralNetwork(nn.Module):
     
     @property
     def device(self) -> torch.device:
+        """
+        The device on which the model is stored.
+        """
         return next(self.parameters()).device

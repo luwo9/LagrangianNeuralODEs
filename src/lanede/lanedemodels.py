@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 
 import torch
+import torch.nn as nn
 
 from .helmholtzmetrics import TryLearnDouglas
 from .integratedodes import SolvedSecondOrderNeuralODE
@@ -16,15 +17,16 @@ from .neural import NeuralNetwork
 
 # NOTE: Maybe n_dim is not strictly required below, if e.g. z is
 # inferred from x and y. (Where x/xdot is optional)
-class LagrangianNeuralODEModel(ABC):
+class LagrangianNeuralODEModel(nn.Module, ABC):
     """
     Abstract class for a Lagrangian neural ODE model. It bundels all
     necessary components and logic to make predictions, update the
     model and evaluate it.
 
-    By calling the `update` method, the model can learn a second order
-    ODE, that satisfies the Helmholtz conditions, from data. A measure/
-    metric for the fullfillment of the Helmholtz conditions is provided.
+    By calling it (which is calling the `update` method), the model can
+    learn a second order ODE, that satisfies the Helmholtz conditions,
+    from data. A measure/metric for the fullfillment of the Helmholtz
+    conditions is provided. See Notes for more information.
 
     The model can also evaluate the (integrated) second order ODE.
 
@@ -33,16 +35,21 @@ class LagrangianNeuralODEModel(ABC):
 
     update(t, x, xdot)
         Update the model based on data.
+
     second_order_function(t, x, xdot)
         Compute the second order derivative.
+
     predict(t, x_0, xdot_0)
         Predict the state and its derivative at time t.
+
     error(t, x_pred, xdot_pred, x_true, xdot_true)
         Compute the prediction error/loss.
+
     helmholtzmetric(t, x, xdot, scalar, combined)
         Evaluate the metric for the Helmholtz conditions.
-    to(device)
-        Move the model to a new device.
+        
+    forward(t, x, xdot)
+        See `update`.
     
     Attributes
     ----------
@@ -53,9 +60,10 @@ class LagrangianNeuralODEModel(ABC):
     Notes
     -----
 
-    All gradient based optimization is performed within the methods
-    itself. All returned errors/losses are thus detached from the
-    computation graph.
+    This is a nn.Module, and thus has all usual properties of a PyTorch
+    module. However, all gradient based optimization is performed
+    within the methods itself. All returned errors/losses are thus
+    detached from the computation graph.
     """
 
     @abstractmethod
@@ -123,19 +131,6 @@ class LagrangianNeuralODEModel(ABC):
     def device(self) -> torch.device:
         """
         The device on which the model is stored.
-        """
-        pass
-
-    @abstractmethod
-    def to(self, device: torch.device | str) -> None:
-        """
-        Move the model to a new device.
-
-        Parameters
-        ----------
-
-        device : torch.device or str
-            The new device.
         """
         pass
 
@@ -241,6 +236,12 @@ class LagrangianNeuralODEModel(ABC):
             result = self._helmholtzmetric(t, x, xdot, scalar, combined)
         return result
 
+    def forward(self, t: torch.Tensor, x: torch.Tensor | None = None, xdot: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        Update the model and returns detached loss values. See `update`.
+        """
+        return self.update(t, x, xdot)
+
     @abstractmethod
     def _predict(self, t: torch.Tensor, x_0: torch.Tensor | None = None, xdot_0: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor]:
         # See predict
@@ -313,9 +314,9 @@ class SimultaneousLearnedDouglasOnlyX(LagrangianNeuralODEModel):
         self._helmholtz_weight = helmholtz_weight
         self._x_loss_function = torch.nn.MSELoss() if x_loss_function is None else x_loss_function
         # Enforce single device for all components
-        self._device = next(self._neural_ode.parameters()).device
-        self._helmholtz_metric.to(self._device)
-        self._xdot_network.to(self._device)
+        device = self._neural_ode.device
+        self._helmholtz_metric.to(device)
+        self._xdot_network.to(device)
 
 
     def update(self, t: torch.Tensor, x: torch.Tensor | None = None, xdot: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor]:
@@ -398,22 +399,7 @@ class SimultaneousLearnedDouglasOnlyX(LagrangianNeuralODEModel):
         """
         The device on which the model is stored.
         """
-        return self._device
-    
-    def to(self, device: torch.device | str) -> None:
-        """
-        Move the model to a new device.
-
-        Parameters
-        ----------
-
-        device : torch.device or str
-            The new device.
-        """
-        self._neural_ode.to(device)
-        self._helmholtz_metric.to(device)
-        self._xdot_network.to(device)
-        self._device = device
+        return self._neural_ode.device
 
     def _predict(self, t: torch.Tensor, x_0: torch.Tensor | None = None, xdot_0: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor]:
         # See predict

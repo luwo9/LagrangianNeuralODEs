@@ -27,6 +27,18 @@ class HelmholtzMetric(nn.Module, ABC):
 
     forward(f, t, x, xdot)
         Computes the metric for the Helmholtz conditions.
+
+    Attributes
+    ----------
+
+    device
+        The device on which the model is stored.
+
+    Notes
+    -----
+
+    This is a nn.Module, and thus has all usual properties of a PyTorch
+    module.
     """
 
     @abstractmethod
@@ -65,6 +77,14 @@ class HelmholtzMetric(nn.Module, ABC):
             The metric for the Helmholtz conditions.
         """
         pass
+    
+    @property
+    @abstractmethod
+    def device(self) -> torch.device:
+        """
+        The device on which the model is stored.
+        """
+        pass
 
 
 class TryLearnDouglas(HelmholtzMetric):
@@ -81,14 +101,14 @@ class TryLearnDouglas(HelmholtzMetric):
     Douglas J. (1939). Solution of the Inverse Problem of the Calculus of Variations. Proceedings of the National Academy of Sciences of the United States of America, 25(12), 631-637. https://doi.org/10.1073/pnas.25.12.631
     """
 
-    def __init__(self, neural_network: Callable, h_2_weight: float = 1.0, h_3_weight: float = 1.0, non_singular_weight: float = 0.1) -> None:
+    def __init__(self, neural_network: nn.Module, h_2_weight: float = 1.0, h_3_weight: float = 1.0, non_singular_weight: float = 0.1) -> None:
         """
         Initializes the metric.
 
         Parameters
         ----------
 
-        neural_network : Callable
+        neural_network : nn.Module
             The neural network to learn the g matrix. Must map 2n_dim+1
             to n_dim(n_dim+1)/2, where n_dim is the dimension of
             the state x.
@@ -177,6 +197,13 @@ class TryLearnDouglas(HelmholtzMetric):
                    + self._non_singular_weight * loss_non_singular)
         
         return metric
+    
+    @property
+    def device(self) -> torch.device:
+        """
+        The device on which the model is stored.
+        """
+        return next(self._neural_network.parameters()).device
     
     def _evaluate_helmholtz_conditions(self, f: Callable, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor, scalar: bool = True) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """

@@ -26,6 +26,12 @@ class SolvedSecondOrderNeuralODE(nn.Module):
     
     second_order_function(t, x, xdot)
         Computes the second order derivative of the state.
+
+    Notes
+    -----
+
+    This is a nn.Module, and thus has all usual properties of a PyTorch
+    module.
     """
 
     def __init__(self, neural_ode: SecondOrderNeuralODE, use_adjoint: bool = True, **odeint_kwargs) -> None:
@@ -104,3 +110,10 @@ class SolvedSecondOrderNeuralODE(nn.Module):
     @staticmethod
     def _get_odeint_solver(use_adjoint: bool) -> Callable:
         return odeint_adjoint if use_adjoint else odeint
+    
+    @property
+    def device(self) -> torch.device:
+        """
+        The device on which the model is stored.
+        """
+        return self._neural_ode.device

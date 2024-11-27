@@ -20,7 +20,50 @@ class SecondOrderNeuralODE(nn.Module, ABC):
     
     second_order_function(t, x, xdot)
         Computes the second order deriative, i.e. $f^\\ast(t, x, \dot{x})$.
+
+    Attributes
+    ----------
+
+    device
+        The device on which the model is stored.
+
+    Notes
+    -----
+
+    This is a nn.Module, and thus has all usual properties of a PyTorch
+    module.
     """
+
+    @abstractmethod
+    def second_order_function(self, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor) -> torch.Tensor:
+        """
+        Computes the second order deriative. More precisely, for the underlying ODE $\ddot{x} = f^\\ast(t, x, \dot{x})$ this function is the $f^\\ast$.
+
+        Parameters
+        ----------
+
+        t : torch.Tensor, shape (n_batch, n_steps)
+            The time at which the state is evaluated.
+        x : torch.Tensor, shape (n_batch, n_steps, n_dim)
+            The state at time t.
+        xdot : torch.Tensor, shape (n_batch, n_steps, n_dim)
+            The derivative of the state at time t.
+
+        Returns
+        -------
+
+        torch.Tensor, shape (n_batch, n_steps, n_dim)
+            The second order derivative of the state.
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def device(self) -> torch.device:
+        """
+        The device on which the model is stored.
+        """
+        pass
     
     def forward(self, t: torch.Tensor, x_and_xdot: torch.Tensor) -> torch.Tensor:
         """
@@ -55,29 +98,6 @@ class SecondOrderNeuralODE(nn.Module, ABC):
 
         return x_and_xdot_dot
 
-    @abstractmethod
-    def second_order_function(self, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor) -> torch.Tensor:
-        """
-        Computes the second order deriative. More precisely, for the underlying ODE $\ddot{x} = f^\\ast(t, x, \dot{x})$ this function is the $f^\\ast$.
-
-        Parameters
-        ----------
-
-        t : torch.Tensor, shape (n_batch, n_steps)
-            The time at which the state is evaluated.
-        x : torch.Tensor, shape (n_batch, n_steps, n_dim)
-            The state at time t.
-        xdot : torch.Tensor, shape (n_batch, n_steps, n_dim)
-            The derivative of the state at time t.
-
-        Returns
-        -------
-
-        torch.Tensor, shape (n_batch, n_steps, n_dim)
-            The second order derivative of the state.
-        """
-        pass
-
 
 class FreeSecondOrderNeuralODE(SecondOrderNeuralODE):
     """
@@ -102,6 +122,13 @@ class FreeSecondOrderNeuralODE(SecondOrderNeuralODE):
         """
         super().__init__()
         self._neural_network = neural_network
+
+    @property
+    def device(self) -> torch.device:
+        """
+        The device on which the model is stored.
+        """
+        return next(self._neural_network.parameters()).device
 
     def second_order_function(self, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor) -> torch.Tensor:
         """
