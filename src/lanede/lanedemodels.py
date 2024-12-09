@@ -307,6 +307,7 @@ class SimultaneousLearnedDouglasOnlyX(LagrangianNeuralODEModel):
 
         All models are moved to be on the device of the neural ODE.
         """
+        super().__init__()
         self._neural_ode = neural_ode
         self._helmholtz_metric = helmholtz_metric
         self._xdot_network = xdot_0_network
