@@ -62,6 +62,7 @@ def train_lagrangian_neural_ode(
     validation_error : np.ndarray
         The validation prediction error.
     """
+    # TODO: Make out_file work
     validate = t_validation is not None
     
     device = model.device
