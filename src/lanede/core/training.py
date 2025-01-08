@@ -51,16 +51,19 @@ def train_lagrangian_neural_ode(
 
     Returns
     -------
-    A dictionary containing the training information. Keys:
+    A dictionary containing the training information.
+    It may have the keys:
 
-    helmholtz : np.ndarray
-        The training Helmholtz loss.
-    error : np.ndarray
-        The training prediction error.
-    validation_helmholtz : np.ndarray
-        The validation Helmholtz loss.
-    validation_error : np.ndarray
-        The validation prediction error.
+        helmholtz : np.ndarray
+            The training Helmholtz loss.
+        error : np.ndarray
+            The training prediction error.
+        validation_helmholtz : np.ndarray
+            The validation Helmholtz loss.
+            (Key only present if validation data is given)
+        validation_error : np.ndarray
+            The validation prediction error.
+            (Key only present if validation data is given)
     """
     # TODO: Make out_file work
     validate = t_validation is not None

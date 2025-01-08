@@ -1,5 +1,5 @@
 """
-`lanede.lanede`
+`lanede.core`
 =================
 
 This subpackage contains the main logic for Lagrangian Neural ODE's.

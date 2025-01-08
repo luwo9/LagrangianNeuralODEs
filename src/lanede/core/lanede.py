@@ -196,7 +196,7 @@ class LagrangianNeuralODE:
             instead of printing it.
 
         The returned dictionary is passed on from the training function.
-        It contains the keys:
+        It may have the keys:
 
         helmholtz : np.ndarray
             The training Helmholtz loss.
@@ -204,8 +204,10 @@ class LagrangianNeuralODE:
             The training prediction error.
         validation_helmholtz : np.ndarray
             The validation Helmholtz loss.
+            (Key only present if validation data is given)
         validation_error : np.ndarray
             The validation prediction error.
+            (Key only present if validation data is given)
         """
         # Bring t in shape (n_batch, n_steps) for normalizer
         n_batches = x.shape[0] if x is not None else xdot.shape[0]
