@@ -386,7 +386,7 @@ class LagrangianNeuralODE:
 
         metric = self._model.helmholtzmetric(t, x, xdot, scalar=scalar, combined=combined)
 
-        if scalar:
+        if combined:
             return metric.detach().numpy()
         
         return tuple(metric_.detach().numpy() for metric_ in metric)

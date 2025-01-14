@@ -422,7 +422,7 @@ class TryLearnDouglas(HelmholtzMetric):
         symmetric_matrix = vector.new_zeros(*shape, n_dim, n_dim)
         triu_indices = torch.triu_indices(n_dim, n_dim)
         symmetric_matrix[..., triu_indices[0], triu_indices[1]] = vector
-        symmetric_matrix += symmetric_matrix.transpose(-2, -1)
+        symmetric_matrix = symmetric_matrix + symmetric_matrix.transpose(-2, -1)
 
         return symmetric_matrix
 
