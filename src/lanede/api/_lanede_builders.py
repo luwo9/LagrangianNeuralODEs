@@ -31,6 +31,7 @@ _activation_fn_map = {
     "Tanh": torch.nn.Tanh,
     "Softplus": torch.nn.Softplus,
     "LeakyReLU": torch.nn.LeakyReLU,
+    "ELU": torch.nn.ELU,
 }
 
 _optimizer_map = {
