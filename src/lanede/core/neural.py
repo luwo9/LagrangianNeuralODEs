@@ -12,7 +12,13 @@ class NeuralNetwork(nn.Module):
     and an activation function.
     """
 
-    def __init__(self, input_size: int, hidden_sizes: list[int], output_size: int, activation_fn: type[nn.Module] = nn.ReLU) -> None:
+    def __init__(
+        self,
+        input_size: int,
+        hidden_sizes: list[int],
+        output_size: int,
+        activation_fn: type[nn.Module] = nn.ReLU,
+    ) -> None:
         """
         Initialize the neural network.
 
@@ -48,7 +54,7 @@ class NeuralNetwork(nn.Module):
 
         x : torch.Tensor
             The input to the neural network.
-        
+
         Returns
         -------
 
@@ -56,7 +62,7 @@ class NeuralNetwork(nn.Module):
             The output of the neural network.
         """
         return self._layers(x)
-    
+
     @property
     def device(self) -> torch.device:
         """

@@ -26,7 +26,9 @@ class OptionalStatesSingleTime(Dataset):
     be supplied. Otherwise like TensorDataset.
     """
 
-    def __init__(self, t: np.ndarray, x: np.ndarray | None = None, xdot: np.ndarray | None = None) -> None:
+    def __init__(
+        self, t: np.ndarray, x: np.ndarray | None = None, xdot: np.ndarray | None = None
+    ) -> None:
         """
         Initializes the dataset.
 
@@ -52,7 +54,9 @@ class OptionalStatesSingleTime(Dataset):
         # Make a copy to be sure
         t = torch.tensor(self._t, dtype=torch.float32)
         x = torch.tensor(self._x[idx], dtype=torch.float32) if self._x is not None else None
-        xdot = torch.tensor(self._xdot[idx], dtype=torch.float32) if self._xdot is not None else None
+        xdot = (
+            torch.tensor(self._xdot[idx], dtype=torch.float32) if self._xdot is not None else None
+        )
         return t, x, xdot
 
 
@@ -68,7 +72,14 @@ def _collate_single_time_and_None(batch):
     return t[0], x, xdot
 
 
-def make_dataloader(t: np.ndarray, x: np.ndarray | None = None, xdot: np.ndarray | None = None, *, batch_size: int, **kwargs) -> DataLoader:
+def make_dataloader(
+    t: np.ndarray,
+    x: np.ndarray | None = None,
+    xdot: np.ndarray | None = None,
+    *,
+    batch_size: int,
+    **kwargs
+) -> DataLoader:
     """
     Creates a DataLoader from the given data.
     State or its derivative might not be supplied.
@@ -94,7 +105,9 @@ def make_dataloader(t: np.ndarray, x: np.ndarray | None = None, xdot: np.ndarray
         The DataLoader for the data.
     """
     dataset = OptionalStatesSingleTime(t, x, xdot)
-    return DataLoader(dataset, batch_size=batch_size, collate_fn=_collate_single_time_and_None, **kwargs)
+    return DataLoader(
+        dataset, batch_size=batch_size, collate_fn=_collate_single_time_and_None, **kwargs
+    )
 
 
 class LagrangianNeuralODE:
@@ -144,7 +157,17 @@ class LagrangianNeuralODE:
         self._normalizer = normalizer
         self._normalizer_was_fitted = False
 
-    def train(self, t: np.ndarray, x: np.ndarray | None = None, xdot: np.ndarray | None = None, *, n_epochs: int, batch_size: int = 32, device: torch.device | str = "cpu", **kwargs) -> dict[str, np.ndarray]:
+    def train(
+        self,
+        t: np.ndarray,
+        x: np.ndarray | None = None,
+        xdot: np.ndarray | None = None,
+        *,
+        n_epochs: int,
+        batch_size: int = 32,
+        device: torch.device | str = "cpu",
+        **kwargs
+    ) -> dict[str, np.ndarray]:
         """
         Trains the model on the given data. Depending on the underlying
         model, this may or may not need both states and their
@@ -215,7 +238,7 @@ class LagrangianNeuralODE:
         if not self._normalizer_was_fitted:
             self._normalizer.fit(t_with_batches, x, xdot)
             self._normalizer_was_fitted = True
-        
+
         t_with_batches, x, xdot = self._normalizer.transform(t_with_batches, x, xdot)
         # Bring back to (n_steps,)
         t = t_with_batches[0]
@@ -225,9 +248,11 @@ class LagrangianNeuralODE:
         validation_keys = ["t_validation", "x_validation", "xdot_validation"]
         t_val, x_val, xdot_val = [kwargs.get(k, None) for k in validation_keys]
         if t_val is not None:
-            n_batches = (x_val.shape[0] if x_val is not None else xdot_val.shape[0])
+            n_batches = x_val.shape[0] if x_val is not None else xdot_val.shape[0]
             t_val_with_batches = np.tile(t_val, (n_batches, 1))
-            t_val, x_val, xdot_val = self._normalizer.transform(t_val_with_batches, x_val, xdot_val)
+            t_val, x_val, xdot_val = self._normalizer.transform(
+                t_val_with_batches, x_val, xdot_val
+            )
             t_val = t_val[0]
             for k, v in zip(validation_keys, [t_val, x_val, xdot_val]):
                 if v is None:
@@ -240,8 +265,10 @@ class LagrangianNeuralODE:
         self._model = model.to(old_device)
 
         return training_info
-    
-    def predict(self, t: np.ndarray, x_0: np.ndarray | None = None, xdot_0: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray]:
+
+    def predict(
+        self, t: np.ndarray, x_0: np.ndarray | None = None, xdot_0: np.ndarray | None = None
+    ) -> tuple[np.ndarray, np.ndarray]:
         """
         Predicts the state and its derivative at time t form the given
         initial values using the ODE.
@@ -283,8 +310,9 @@ class LagrangianNeuralODE:
         t_with_batches = self._normalizer.transform(t_with_batches)[0]
 
         x_0 = torch.tensor(x_0, dtype=torch.float32).squeeze(1) if x_0 is not None else None
-        xdot_0 = (torch.tensor(xdot_0, dtype=torch.float32).squeeze(1)
-                  if xdot_0 is not None else None)
+        xdot_0 = (
+            torch.tensor(xdot_0, dtype=torch.float32).squeeze(1) if xdot_0 is not None else None
+        )
         t_with_batches = torch.tensor(t_with_batches, dtype=torch.float32)
 
         x, xdot = self._model.predict(t_with_batches[0], x_0, xdot_0)
@@ -296,7 +324,7 @@ class LagrangianNeuralODE:
         _, x, xdot = self._normalizer.inverse_transform(t_with_batches, x, xdot)
 
         return x, xdot
-    
+
     def second_derivative(self, t: np.ndarray, x: np.ndarray, xdot: np.ndarray) -> np.ndarray:
         """
         Computes the second order derivative of the state at time t.
@@ -333,8 +361,15 @@ class LagrangianNeuralODE:
         xdotdot = self._normalizer.inverse_transform(t, x, xdot, xdotdot)[3]
 
         return xdotdot
-    
-    def helmholtzmetric(self, t: np.ndarray, x: np.ndarray, xdot: np.ndarray, scalar: bool = True, combined: bool = True) -> np.ndarray | tuple[np.ndarray, ...]:
+
+    def helmholtzmetric(
+        self,
+        t: np.ndarray,
+        x: np.ndarray,
+        xdot: np.ndarray,
+        scalar: bool = True,
+        combined: bool = True,
+    ) -> np.ndarray | tuple[np.ndarray, ...]:
         """
         Computes the metric of fullfilment of the Helmholtz conditions
         for the second order ODE at given points in time and state.
@@ -388,10 +423,17 @@ class LagrangianNeuralODE:
 
         if combined:
             return metric.detach().numpy()
-        
+
         return tuple(metric_.detach().numpy() for metric_ in metric)
 
-    def error(self, t: np.ndarray, x_pred: np.ndarray | None = None, xdot_pred: np.ndarray | None = None, x_true: np.ndarray | None = None, xdot_true: np.ndarray | None = None) -> np.ndarray:
+    def error(
+        self,
+        t: np.ndarray,
+        x_pred: np.ndarray | None = None,
+        xdot_pred: np.ndarray | None = None,
+        x_true: np.ndarray | None = None,
+        xdot_true: np.ndarray | None = None,
+    ) -> np.ndarray:
         """
         Computes the pediction error/loss of the neural ode model.
 
@@ -430,17 +472,15 @@ class LagrangianNeuralODE:
 
         t = torch.tensor(t, dtype=torch.float32)
         x_pred = torch.tensor(x_pred, dtype=torch.float32) if x_pred is not None else None
-        xdot_pred = (torch.tensor(xdot_pred, dtype=torch.float32)
-                     if xdot_pred is not None else None)
+        xdot_pred = torch.tensor(xdot_pred, dtype=torch.float32) if xdot_pred is not None else None
         x_true = torch.tensor(x_true, dtype=torch.float32) if x_true is not None else None
-        xdot_true = (torch.tensor(xdot_true, dtype=torch.float32)
-                     if xdot_true is not None else None)
+        xdot_true = torch.tensor(xdot_true, dtype=torch.float32) if xdot_true is not None else None
 
         error = self._model.error(t, x_pred, xdot_pred, x_true, xdot_true)
         error = error.detach().numpy()
 
         return error
-    
+
     def state_dict(self) -> dict:
         """
         Returns a dictionary containing the state of the
@@ -455,11 +495,11 @@ class LagrangianNeuralODE:
         state_dict = {
             "model": self._model.state_dict(),
             "normalizer": self._normalizer.state_dict(),
-            "normalizer_was_fitted": self._normalizer_was_fitted
+            "normalizer_was_fitted": self._normalizer_was_fitted,
         }
 
         return state_dict
-    
+
     def load_state_dict(self, state_dict: dict) -> None:
         """
         Loads the state of the Lagrangian Neural ODE from the given

@@ -2,6 +2,7 @@
 This module contains ODEs for toy problems. They can be integrated to
 generate data.
 """
+
 from __future__ import annotations
 from abc import ABC, abstractmethod
 
@@ -14,7 +15,9 @@ from scipy.integrate import solve_ivp
 # need to specify all of: t, x_0, xdot_0, oscillator parameters, etc.
 
 
-def from_ode(ode: ODE, t: np.ndarray, x_0: np.ndarray, xdot_0: np.ndarray, **solve_ivp_kwargs) -> np.ndarray:
+def from_ode(
+    ode: ODE, t: np.ndarray, x_0: np.ndarray, xdot_0: np.ndarray, **solve_ivp_kwargs
+) -> np.ndarray:
     """
     Generate data from an ODE. To do this the ode is integrated using
     `scipy.integrate.solve_ivp`.
@@ -56,7 +59,7 @@ def from_ode(ode: ODE, t: np.ndarray, x_0: np.ndarray, xdot_0: np.ndarray, **sol
     def scipy_ode_func(t, y):
         # t is scalar, y is 1D array
         # Convert to fit ODE signature
-        y = y.reshape((n_batch, 1, 2*n_dim))
+        y = y.reshape((n_batch, 1, 2 * n_dim))
         x, xdot = np.split(y, 2, axis=2)
         t = np.full((n_batch, 1), t)
 
@@ -64,11 +67,11 @@ def from_ode(ode: ODE, t: np.ndarray, x_0: np.ndarray, xdot_0: np.ndarray, **sol
 
         # Return as 1D array
         return np.concatenate([xdot, xdotdot], axis=2).flatten()
-    
+
     y_0 = np.concatenate([x_0, xdot_0], axis=1).flatten()
 
     sol = solve_ivp(scipy_ode_func, (t[0], t[-1]), y_0, t_eval=t, **kwargs_with_defaults)
-    y = sol.y.reshape((n_batch, 2*n_dim, len(t)))
+    y = sol.y.reshape((n_batch, 2 * n_dim, len(t)))
     y = y.transpose((0, 2, 1))
 
     x, xdot = np.split(y, 2, axis=2)
@@ -101,7 +104,7 @@ class ODE(ABC):
             The state at time t.
         xdot : np.ndarray, shape (n_batch, n_steps, n_dim)
             The derivative of the state at time t.
-        
+
         Returns
         -------
 
@@ -141,7 +144,7 @@ class DampedHarmonicOscillator(ODE):
 
     def __call__(self, t: np.ndarray, x: np.ndarray, xdot: np.ndarray) -> np.ndarray:
         return -self._matmul(self._K, x) - self._matmul(self._C, xdot)
-    
+
     @staticmethod
     def _matmul(matrix, vector):
         # (double) Batched vector times non-batched matrix

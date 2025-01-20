@@ -23,7 +23,7 @@ class SolvedSecondOrderNeuralODE(nn.Module):
 
     forward(t, x_0, xdot_0)
         Computes the state x and derivative xdot at time t.
-    
+
     second_order_function(t, x, xdot)
         Computes the second order derivative of the state.
 
@@ -34,7 +34,9 @@ class SolvedSecondOrderNeuralODE(nn.Module):
     module.
     """
 
-    def __init__(self, neural_ode: SecondOrderNeuralODE, use_adjoint: bool = True, **odeint_kwargs) -> None:
+    def __init__(
+        self, neural_ode: SecondOrderNeuralODE, use_adjoint: bool = True, **odeint_kwargs
+    ) -> None:
         """
         Initializes the model.
 
@@ -53,7 +55,9 @@ class SolvedSecondOrderNeuralODE(nn.Module):
         self._odeint = self._get_odeint_solver(use_adjoint)
         self._odeint_kwargs = odeint_kwargs
 
-    def forward(self, t: torch.Tensor, x_0: torch.Tensor, xdot_0: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self, t: torch.Tensor, x_0: torch.Tensor, xdot_0: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Computes the state x at time t given the initial state x_0 and its derivative xdot_0,
         by integrating the underlying ODE. The derivative xdot is computed aswell.
@@ -80,12 +84,14 @@ class SolvedSecondOrderNeuralODE(nn.Module):
         x_and_xdot_0 = torch.cat([x_0, xdot_0], dim=1)
 
         x_and_xdot = self._odeint(self._neural_ode, x_and_xdot_0, t, **self._odeint_kwargs)
-        x_and_xdot = x_and_xdot.permute(1, 0, 2) # timesteps at second dimension
+        x_and_xdot = x_and_xdot.permute(1, 0, 2)  # timesteps at second dimension
 
         x, xdot = torch.split(x_and_xdot, dim, dim=2)
         return x, xdot
-    
-    def second_order_function(self, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor) -> torch.Tensor:
+
+    def second_order_function(
+        self, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor
+    ) -> torch.Tensor:
         """
         Computes the second order derivative. More precisely, for the underlying ODE $\ddot{x} = f^\\ast(t, x, \dot{x})$ this function is the $f^\\ast.
 
@@ -106,11 +112,11 @@ class SolvedSecondOrderNeuralODE(nn.Module):
             The second order derivative of the state.
         """
         return self._neural_ode.second_order_function(t, x, xdot)
-    
+
     @staticmethod
     def _get_odeint_solver(use_adjoint: bool) -> Callable:
         return odeint_adjoint if use_adjoint else odeint
-    
+
     @property
     def device(self) -> torch.device:
         """

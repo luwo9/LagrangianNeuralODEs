@@ -1,6 +1,8 @@
 """Contains helper functions for autograd."""
+
 from collections.abc import Callable
 from functools import wraps
+
 
 def restore_dims_from_vmap(func: Callable, batch_over_dims: tuple[int, ...]) -> Callable:
     """
@@ -20,7 +22,7 @@ def restore_dims_from_vmap(func: Callable, batch_over_dims: tuple[int, ...]) -> 
 
     Callable
         The wrapped function with restored dimensions.
-    
+
     Notes
     -----
 
@@ -38,6 +40,7 @@ def restore_dims_from_vmap(func: Callable, batch_over_dims: tuple[int, ...]) -> 
     E.g. a call of vmap twice (both times with in_dims=0) corresponds to
     batch_over_dims=(0, 0).
     """
+
     @wraps(func)
     def function_with_restored_dims(*x):
         x = list(x)
@@ -50,11 +53,11 @@ def restore_dims_from_vmap(func: Callable, batch_over_dims: tuple[int, ...]) -> 
             for j in batch_over_dims:
                 computed_result = computed_result.squeeze(j)
             return computed_result
-        
+
         computed_result = list(computed_result)
         for i in range(len(computed_result)):
             for j in batch_over_dims:
                 computed_result[i] = computed_result[i].squeeze(j)
         return tuple(computed_result)
-    
+
     return function_with_restored_dims

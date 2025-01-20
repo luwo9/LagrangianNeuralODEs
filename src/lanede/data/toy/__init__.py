@@ -15,8 +15,5 @@ ODEs
 ODE (abstract)
 DampedHarmonicOscillator
 """
-from .odes import (
-    from_ode,
-    ODE,
-    DampedHarmonicOscillator
-)
+
+from .odes import from_ode, ODE, DampedHarmonicOscillator

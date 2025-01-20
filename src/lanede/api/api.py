@@ -6,6 +6,7 @@ models.
 Simmilar to `lanede.core.LagrangianNeuralODE`, but allows easily creating models
 from configuration dictionaries as well as saving and loading them.
 """
+
 from __future__ import annotations
 from collections.abc import Callable
 import json
@@ -30,7 +31,7 @@ _BUILDERS: dict[str, Callable[[JSONDict], LagrangianNeuralODE]] = {
     "simple_douglas": simple_douglas_only_x,
 }
 
-EXAMPLES : dict[str, JSONDict] = {
+EXAMPLES: dict[str, JSONDict] = {
     "simple_douglas": example_simple_douglas_only_x,
 }
 
@@ -102,7 +103,17 @@ class LanedeAPI:
         self._model = _BUILDERS[preset_name](preset_config)
         self._losses = []
 
-    def train(self, t: np.ndarray, x: np.ndarray | None = None, xdot: np.ndarray | None = None, *, n_epochs: int, batch_size: int = 32, device: torch.device | str = "cpu", **kwargs) -> dict[str, np.ndarray]:
+    def train(
+        self,
+        t: np.ndarray,
+        x: np.ndarray | None = None,
+        xdot: np.ndarray | None = None,
+        *,
+        n_epochs: int,
+        batch_size: int = 32,
+        device: torch.device | str = "cpu",
+        **kwargs,
+    ) -> dict[str, np.ndarray]:
         """
         Trains the model on the given data. Depending on the underlying
         model, this may or may not need both states and their
@@ -167,12 +178,15 @@ class LanedeAPI:
             The validation prediction error.
             (Key only present if validation data is given)
         """
-        metrics = self._model.train(t, x, xdot, n_epochs=n_epochs,
-                                    batch_size=batch_size, device=device, **kwargs)
+        metrics = self._model.train(
+            t, x, xdot, n_epochs=n_epochs, batch_size=batch_size, device=device, **kwargs
+        )
         self._losses.append(metrics)
         return metrics
-    
-    def predict(self, t: np.ndarray, x_0: np.ndarray | None = None, xdot_0: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray]:
+
+    def predict(
+        self, t: np.ndarray, x_0: np.ndarray | None = None, xdot_0: np.ndarray | None = None
+    ) -> tuple[np.ndarray, np.ndarray]:
         """
         Predicts the state and its derivative at time t form the given
         initial values using the ODE.
@@ -201,7 +215,7 @@ class LanedeAPI:
         Only may be called after calling `train`.
         """
         return self._model.predict(t, x_0, xdot_0)
-    
+
     def second_derivative(self, t: np.ndarray, x: np.ndarray, xdot: np.ndarray) -> np.ndarray:
         """
         Computes the second order derivative of the state at time t.
@@ -228,8 +242,15 @@ class LanedeAPI:
         Only may be called after calling `train`.
         """
         return self._model.second_derivative(t, x, xdot)
-    
-    def helmholtzmetric(self, t: np.ndarray, x: np.ndarray, xdot: np.ndarray, scalar: bool = True, combined: bool = True) -> np.ndarray | tuple[np.ndarray, ...]:
+
+    def helmholtzmetric(
+        self,
+        t: np.ndarray,
+        x: np.ndarray,
+        xdot: np.ndarray,
+        scalar: bool = True,
+        combined: bool = True,
+    ) -> np.ndarray | tuple[np.ndarray, ...]:
         """
         Computes the metric of fullfilment of the Helmholtz conditions
         for the second order ODE at given points in time and state.
@@ -275,8 +296,15 @@ class LanedeAPI:
         but only provide a metric.
         """
         return self._model.helmholtzmetric(t, x, xdot, scalar=scalar, combined=combined)
-    
-    def error(self, t: np.ndarray, x_pred: np.ndarray | None = None, xdot_pred: np.ndarray | None = None, x_true: np.ndarray | None = None, xdot_true: np.ndarray | None = None) -> np.ndarray:
+
+    def error(
+        self,
+        t: np.ndarray,
+        x_pred: np.ndarray | None = None,
+        xdot_pred: np.ndarray | None = None,
+        x_true: np.ndarray | None = None,
+        xdot_true: np.ndarray | None = None,
+    ) -> np.ndarray:
         """
         Computes the pediction error/loss of the neural ode model.
 
@@ -306,7 +334,7 @@ class LanedeAPI:
         underlying model. Only may be called after calling `train`.
         """
         return self._model.error(t, x_pred, xdot_pred, x_true, xdot_true)
-    
+
     @property
     def losses(self) -> list[dict[str, np.ndarray]]:
         """
@@ -321,7 +349,7 @@ class LanedeAPI:
             The losses of the model during training.
         """
         return deepcopy(self._losses)
-    
+
     def save(self, path: str, losses: bool = True):
         """
         Saves the model to the given path. Depending on the specified
@@ -342,13 +370,13 @@ class LanedeAPI:
         -----
 
         If saving as a directory, the following structure is used:
-        
+
         path/
             config.json
             model.pt
             losses/
                 loss_<i>_<name>.txt
-        
+
         Where `config.json` contains the configuration dictionary and
         the preset name, `model.pt` contains the model itself and
         `losses/` contains the losses. The losses are saved as text
@@ -375,10 +403,7 @@ class LanedeAPI:
 
         if losses:
             # Convert numpy arrays to lists
-            list_losses = [
-                {k: v.tolist() for k, v in loss.items()}
-                for loss in self._losses
-            ]
+            list_losses = [{k: v.tolist() for k, v in loss.items()} for loss in self._losses]
             save_dict["losses"] = list_losses
 
         torch.save(save_dict, path)
@@ -438,9 +463,9 @@ class LanedeAPI:
         """
         if path.endswith(".pt"):
             return cls._single_load(path)
-        
+
         return cls._dir_load(path)
-        
+
     @classmethod
     def _single_load(cls, path: str) -> LanedeAPI:
         # Inverse of _single_save
@@ -457,12 +482,11 @@ class LanedeAPI:
 
         if "losses" in save_dict:
             api._losses = [
-                {k: np.array(v) for k, v in loss.items()}
-                for loss in save_dict["losses"]
+                {k: np.array(v) for k, v in loss.items()} for loss in save_dict["losses"]
             ]
 
         return api
-    
+
     @classmethod
     def _dir_load(cls, path: str) -> LanedeAPI:
         # Inverse of _dir_save
@@ -471,7 +495,7 @@ class LanedeAPI:
         config_path = path / "config.json"
         with config_path.open() as f:
             config_with_name = json.load(f)
-        
+
         preset_name = config_with_name["preset_name"]
         config = config_with_name["config"]
 
@@ -488,7 +512,7 @@ class LanedeAPI:
             api._losses = losses
 
         return api
-    
+
     @staticmethod
     def _load_losses(losses_dir: Path) -> list[dict[str, np.ndarray]]:
         # Get all loss files and sort them by "i" in the filename

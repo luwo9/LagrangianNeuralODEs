@@ -2,6 +2,7 @@
 This module contains logic for creating predefined
 `LagrangianNeuralODE`'s from simple configuration dictionaries.
 """
+
 import torch
 from lanede.core import (
     NeuralNetwork,
@@ -20,7 +21,9 @@ from lanede.core import (
 # configuration dictionary named `example_<func_name>`.
 
 
-JSONPrimitive = dict[str, "JSONPrimitive"] | list["JSONPrimitive"] | str | int | float | bool | None
+JSONPrimitive = (
+    dict[str, "JSONPrimitive"] | list["JSONPrimitive"] | str | int | float | bool | None
+)
 JSONDict = dict[str, JSONPrimitive]
 
 
@@ -78,6 +81,7 @@ example_simple_douglas_only_x: JSONDict = {
     },
 }
 
+
 def simple_douglas_only_x(config: JSONDict) -> LagrangianNeuralODE:
     """
     Create a `LagrangianNeuralODE` with a `SimultaneousLearnedDouglasOnlyX`
@@ -95,7 +99,7 @@ def simple_douglas_only_x(config: JSONDict) -> LagrangianNeuralODE:
     activation_fn = _activation_fn_map[ode_config["activation_fn"]]
     ode_net = NeuralNetwork(full_dim, hidden_layer_sizes, dim, activation_fn)
     ode = FreeSecondOrderNeuralODE(ode_net)
-    
+
     rtol = ode_config["rtol"]
     atol = ode_config["atol"]
     use_adjoint = ode_config["use_adjoint"]
@@ -118,9 +122,9 @@ def simple_douglas_only_x(config: JSONDict) -> LagrangianNeuralODE:
 
     optimizer = _optimizer_map[config["learning"]["optimizer"]]
     lr = config["learning"]["lr"]
-    all_params = (list(metric.parameters())
-                  + list(ode.parameters())
-                  + list(initial_net.parameters()))
+    all_params = (
+        list(metric.parameters()) + list(ode.parameters()) + list(initial_net.parameters())
+    )
     optimizer = optimizer(all_params, lr=lr)
 
     total_weight = helmholtz_config["total_weight"]

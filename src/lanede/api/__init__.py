@@ -14,6 +14,7 @@ The names for the predefined configurablle models, together with
 corresponding example configuration dictionaries are defined in
 the `EXAMPLES` dictionary.
 """
+
 from .api import LanedeAPI, EXAMPLES
 
 __all__ = ["LanedeAPI", "EXAMPLES"]

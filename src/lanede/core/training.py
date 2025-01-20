@@ -18,7 +18,8 @@ def train_lagrangian_neural_ode(
     xdot_validation: torch.Tensor | None = None,
     print_every: int = 1,
     validation_every: int = 1,
-    out_file: str | None = None) -> dict[str, np.ndarray]:
+    out_file: str | None = None,
+) -> dict[str, np.ndarray]:
     """
     Trains a Lagrangian Neural ODE model.
     The device is set to the device of the model.
@@ -67,7 +68,7 @@ def train_lagrangian_neural_ode(
     """
     # TODO: Make out_file work
     validate = t_validation is not None
-    
+
     device = model.device
 
     out_dict = {
@@ -76,10 +77,12 @@ def train_lagrangian_neural_ode(
     }
 
     if validate:
-        out_dict.update({
-        "validation_helmholtz": [],
-        "validation_error": [],
-        })
+        out_dict.update(
+            {
+                "validation_helmholtz": [],
+                "validation_error": [],
+            }
+        )
 
         t_repeated = t_validation.repeat(x_validation.shape[0], 1)
 
@@ -108,27 +111,34 @@ def train_lagrangian_neural_ode(
         out_dict["error"][-1] /= n_step
 
         if epoch % print_every == 0:
-            print(f"Epoch {epoch} - "
-                  f"Helmholtz: {out_dict['helmholtz'][-1]:.4f}, "
-                  f"Error: {out_dict['error'][-1]:.4f}", file=out_file)
-            
+            print(
+                f"Epoch {epoch} - "
+                f"Helmholtz: {out_dict['helmholtz'][-1]:.4f}, "
+                f"Error: {out_dict['error'][-1]:.4f}",
+                file=out_file,
+            )
+
         if validate and epoch % validation_every == 0:
             x_val_0 = x_validation[:, 0, :] if x_validation is not None else None
             xdot_val_0 = xdot_validation[:, 0, :] if xdot_validation is not None else None
 
             x_val_pred, xdot_val_pred = model.predict(t_validation, x_val_0, xdot_val_0)
             helmholtz_val = model.helmholtzmetric(t_repeated, x_val_pred, xdot_val_pred)
-            error_val = model.error(t_validation, x_val_pred, xdot_val_pred,
-                                    x_validation, xdot_validation)
+            error_val = model.error(
+                t_validation, x_val_pred, xdot_val_pred, x_validation, xdot_validation
+            )
 
             # Since validation is anyways only done per epoch, don't
             # average here
             out_dict["validation_helmholtz"][-1] = helmholtz_val.item()
             out_dict["validation_error"][-1] = error_val.item()
 
-            print(f"Validation Epoch {epoch} - "
-                  f"Helmholtz: {out_dict['validation_helmholtz'][-1]:.4f}, "
-                  f"Error: {out_dict['validation_error'][-1]:.4f}", file=out_file)
+            print(
+                f"Validation Epoch {epoch} - "
+                f"Helmholtz: {out_dict['validation_helmholtz'][-1]:.4f}, "
+                f"Error: {out_dict['validation_error'][-1]:.4f}",
+                file=out_file,
+            )
 
     for key, val in out_dict.items():
         out_dict[key] = np.array(val)

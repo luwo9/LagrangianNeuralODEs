@@ -47,10 +47,10 @@ class LagrangianNeuralODEModel(nn.Module, ABC):
 
     helmholtzmetric(t, x, xdot, scalar, combined)
         Evaluate the metric for the Helmholtz conditions.
-        
+
     forward(t, x, xdot)
         See `update`.
-    
+
     Attributes
     ----------
 
@@ -67,7 +67,9 @@ class LagrangianNeuralODEModel(nn.Module, ABC):
     """
 
     @abstractmethod
-    def update(self, t: torch.Tensor, x: torch.Tensor | None = None, xdot: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor]:
+    def update(
+        self, t: torch.Tensor, x: torch.Tensor | None = None, xdot: torch.Tensor | None = None
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Update the model based on data of the state and its derivative
         at times t.
@@ -91,7 +93,7 @@ class LagrangianNeuralODEModel(nn.Module, ABC):
 
         Notes
         -----
-        
+
         Note that to update only a part of the state or its derivative
         may be required. Thus some of the arguments are optional.
 
@@ -102,7 +104,9 @@ class LagrangianNeuralODEModel(nn.Module, ABC):
         pass
 
     @abstractmethod
-    def second_order_function(self, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor) -> torch.Tensor:
+    def second_order_function(
+        self, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor
+    ) -> torch.Tensor:
         """
         Computes the second order derivative. More precisely, for the
         underlying ODE $\ddot{x} = f^\\ast(t, x, \dot{x})$,
@@ -134,7 +138,9 @@ class LagrangianNeuralODEModel(nn.Module, ABC):
         """
         pass
 
-    def predict(self, t: torch.Tensor, x_0: torch.Tensor | None = None, xdot_0: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor]:
+    def predict(
+        self, t: torch.Tensor, x_0: torch.Tensor | None = None, xdot_0: torch.Tensor | None = None
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Predicts the state and its derivative at time t.
 
@@ -164,7 +170,14 @@ class LagrangianNeuralODEModel(nn.Module, ABC):
             result = self._predict(t, x_0, xdot_0)
         return result
 
-    def error(self, t: torch.Tensor, x_pred: torch.Tensor | None = None, xdot_pred: torch.Tensor | None = None, x_true: torch.Tensor | None = None, xdot_true: torch.Tensor | None = None) -> torch.Tensor:
+    def error(
+        self,
+        t: torch.Tensor,
+        x_pred: torch.Tensor | None = None,
+        xdot_pred: torch.Tensor | None = None,
+        x_true: torch.Tensor | None = None,
+        xdot_true: torch.Tensor | None = None,
+    ) -> torch.Tensor:
         """
         Computes the pediction error/loss of the neural ode model.
 
@@ -196,8 +209,15 @@ class LagrangianNeuralODEModel(nn.Module, ABC):
         with torch.inference_mode():
             result = self._error(t, x_pred, xdot_pred, x_true, xdot_true)
         return result
-    
-    def helmholtzmetric(self, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor, scalar: bool = True, combined: bool = True) -> torch.Tensor | tuple[torch.Tensor, ...]:
+
+    def helmholtzmetric(
+        self,
+        t: torch.Tensor,
+        x: torch.Tensor,
+        xdot: torch.Tensor,
+        scalar: bool = True,
+        combined: bool = True,
+    ) -> torch.Tensor | tuple[torch.Tensor, ...]:
         """
         Computes the metric of fullfilment of the Helmholtz conditions
         for the second order ODE at given points in time and state.
@@ -222,7 +242,6 @@ class LagrangianNeuralODEModel(nn.Module, ABC):
             Whether to return a single metric for all conditions
             combined or individual metrics for each condition.
 
-
         Returns
         -------
 
@@ -236,24 +255,42 @@ class LagrangianNeuralODEModel(nn.Module, ABC):
             result = self._helmholtzmetric(t, x, xdot, scalar, combined)
         return result
 
-    def forward(self, t: torch.Tensor, x: torch.Tensor | None = None, xdot: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self, t: torch.Tensor, x: torch.Tensor | None = None, xdot: torch.Tensor | None = None
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Update the model and returns detached loss values. See `update`.
         """
         return self.update(t, x, xdot)
 
     @abstractmethod
-    def _predict(self, t: torch.Tensor, x_0: torch.Tensor | None = None, xdot_0: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor]:
+    def _predict(
+        self, t: torch.Tensor, x_0: torch.Tensor | None = None, xdot_0: torch.Tensor | None = None
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         # See predict
         pass
 
     @abstractmethod
-    def _error(self, t: torch.Tensor, x_pred: torch.Tensor | None = None, xdot_pred: torch.Tensor | None = None, x_true: torch.Tensor | None = None, xdot_true: torch.Tensor | None = None) -> torch.Tensor:
+    def _error(
+        self,
+        t: torch.Tensor,
+        x_pred: torch.Tensor | None = None,
+        xdot_pred: torch.Tensor | None = None,
+        x_true: torch.Tensor | None = None,
+        xdot_true: torch.Tensor | None = None,
+    ) -> torch.Tensor:
         # See error
         pass
 
     @abstractmethod
-    def _helmholtzmetric(self, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor, scalar: bool = True, combined: bool = True) -> torch.Tensor | tuple[torch.Tensor, ...]:
+    def _helmholtzmetric(
+        self,
+        t: torch.Tensor,
+        x: torch.Tensor,
+        xdot: torch.Tensor,
+        scalar: bool = True,
+        combined: bool = True,
+    ) -> torch.Tensor | tuple[torch.Tensor, ...]:
         # See helmholtzmetric
         pass
 
@@ -271,7 +308,15 @@ class SimultaneousLearnedDouglasOnlyX(LagrangianNeuralODEModel):
     as well.
     """
 
-    def __init__(self, neural_ode: SolvedSecondOrderNeuralODE, helmholtz_metric: TryLearnDouglas, xdot_0_network: NeuralNetwork, common_optimizer: torch.optim.Optimizer, helmholtz_weight: float = 1e2, x_loss_function: Callable | None = None) -> None:
+    def __init__(
+        self,
+        neural_ode: SolvedSecondOrderNeuralODE,
+        helmholtz_metric: TryLearnDouglas,
+        xdot_0_network: NeuralNetwork,
+        common_optimizer: torch.optim.Optimizer,
+        helmholtz_weight: float = 1e2,
+        x_loss_function: Callable | None = None,
+    ) -> None:
         """
         Initializes the model.
 
@@ -319,15 +364,16 @@ class SimultaneousLearnedDouglasOnlyX(LagrangianNeuralODEModel):
         self._helmholtz_metric.to(device)
         self._xdot_network.to(device)
 
-
-    def update(self, t: torch.Tensor, x: torch.Tensor | None = None, xdot: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor]:
+    def update(
+        self, t: torch.Tensor, x: torch.Tensor | None = None, xdot: torch.Tensor | None = None
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Update the model based on data of the state.
 
         Parameters
         ----------
 
-        t : torch.Tensor, shape (n_steps,)  
+        t : torch.Tensor, shape (n_steps,)
             The time points.
         x : torch.Tensor, shape (n_batch, n_steps, n_dim), optional
             The (data) states at time steps t.
@@ -344,7 +390,7 @@ class SimultaneousLearnedDouglasOnlyX(LagrangianNeuralODEModel):
 
         Notes
         -----
-        
+
         The derivative of the state will be ignored by
         `error` and `predict` and thus also here.
 
@@ -366,9 +412,11 @@ class SimultaneousLearnedDouglasOnlyX(LagrangianNeuralODEModel):
         total_loss.backward()
         self._optimizer.step()
 
-        return helmholtz_loss.detach(), regression_loss.detach() # clone should not be necessary
-    
-    def second_order_function(self, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor) -> torch.Tensor:
+        return helmholtz_loss.detach(), regression_loss.detach()  # clone should not be necessary
+
+    def second_order_function(
+        self, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor
+    ) -> torch.Tensor:
         """
         Computes the second order derivative as given by the neural ode.
         More precisely, for the underlying ODE
@@ -394,7 +442,7 @@ class SimultaneousLearnedDouglasOnlyX(LagrangianNeuralODEModel):
         with torch.inference_mode():
             result = self._neural_ode.second_order_function(t, x, xdot)
         return result
-    
+
     @property
     def device(self) -> torch.device:
         """
@@ -402,18 +450,34 @@ class SimultaneousLearnedDouglasOnlyX(LagrangianNeuralODEModel):
         """
         return self._neural_ode.device
 
-    def _predict(self, t: torch.Tensor, x_0: torch.Tensor | None = None, xdot_0: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor]:
+    def _predict(
+        self, t: torch.Tensor, x_0: torch.Tensor | None = None, xdot_0: torch.Tensor | None = None
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         # See predict
         # Predict initial condition of xdot then neural ode prediction
         xdot_0_pred = self._xdot_network(x_0)
         return self._neural_ode(t, x_0, xdot_0_pred)
-    
-    def _error(self, t: torch.Tensor, x_pred: torch.Tensor | None = None, xdot_pred: torch.Tensor | None = None, x_true: torch.Tensor | None = None, xdot_true: torch.Tensor | None = None) -> torch.Tensor:
+
+    def _error(
+        self,
+        t: torch.Tensor,
+        x_pred: torch.Tensor | None = None,
+        xdot_pred: torch.Tensor | None = None,
+        x_true: torch.Tensor | None = None,
+        xdot_true: torch.Tensor | None = None,
+    ) -> torch.Tensor:
         # See error
         x_loss = self._x_loss_function(x_pred, x_true)
         return x_loss
-    
-    def _helmholtzmetric(self, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor, scalar: bool = True, combined: bool = True) -> torch.Tensor | tuple[torch.Tensor, ...]:
+
+    def _helmholtzmetric(
+        self,
+        t: torch.Tensor,
+        x: torch.Tensor,
+        xdot: torch.Tensor,
+        scalar: bool = True,
+        combined: bool = True,
+    ) -> torch.Tensor | tuple[torch.Tensor, ...]:
         # See helmholtzmetric
         f = self._neural_ode.second_order_function
         return self._helmholtz_metric.forward(f, t, x, xdot, scalar, combined)

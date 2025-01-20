@@ -11,4 +11,5 @@ Submodules
 lanede.data.toy
     Contains data generation functions for toy problems.
 """
+
 from . import toy

@@ -17,7 +17,7 @@ class SecondOrderNeuralODE(nn.Module, ABC):
 
     forward(t, x_and_xdot)
         Usual PyTorch forward pass of a neural ODE reduced to a first order system.
-    
+
     second_order_function(t, x, xdot)
         Computes the second order deriative, i.e. $f^\\ast(t, x, \dot{x})$.
 
@@ -35,7 +35,9 @@ class SecondOrderNeuralODE(nn.Module, ABC):
     """
 
     @abstractmethod
-    def second_order_function(self, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor) -> torch.Tensor:
+    def second_order_function(
+        self, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor
+    ) -> torch.Tensor:
         """
         Computes the second order deriative. More precisely, for the underlying ODE $\ddot{x} = f^\\ast(t, x, \dot{x})$ this function is the $f^\\ast$.
 
@@ -64,7 +66,7 @@ class SecondOrderNeuralODE(nn.Module, ABC):
         The device on which the model is stored.
         """
         pass
-    
+
     def forward(self, t: torch.Tensor, x_and_xdot: torch.Tensor) -> torch.Tensor:
         """
         Forward pass of the model. Computes the neural ODE reduced to a first order system.
@@ -86,13 +88,13 @@ class SecondOrderNeuralODE(nn.Module, ABC):
             The derivative of the state at time t.
         """
         dim = x_and_xdot.shape[1] // 2
-        
+
         # Prepare shape for the second order function
         n_batch = x_and_xdot.shape[0]
         t = t.repeat(n_batch, 1)
         x_and_xdot = x_and_xdot.unsqueeze(1)
 
-        x, xdot = torch.split(x_and_xdot, dim, dim=2) # dim=2 as unsqueezed
+        x, xdot = torch.split(x_and_xdot, dim, dim=2)  # dim=2 as unsqueezed
         xdotdot = self.second_order_function(t, x, xdot)
         x_and_xdot_dot = torch.cat([xdot, xdotdot], dim=2).squeeze(1)  # = sdot = d/dt x_and_xdot
 
@@ -130,7 +132,9 @@ class FreeSecondOrderNeuralODE(SecondOrderNeuralODE):
         """
         return next(self._neural_network.parameters()).device
 
-    def second_order_function(self, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor) -> torch.Tensor:
+    def second_order_function(
+        self, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor
+    ) -> torch.Tensor:
         """
         Computes the second order deriative. More precisely, for the underlying ODE $\ddot{x} = f^\\ast(t, x, \dot{x})$ this function is the $f^\\ast$.
 
