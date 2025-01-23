@@ -1,0 +1,117 @@
+"""
+This script trains a Lagrangian Neural ODE on a toy dataset of a
+harmonic oscillator.
+
+A few general settings are defined at the beginning of the script.
+"""
+
+from pathlib import Path
+
+import numpy as np
+
+from lanede.api import LanedeAPI, EXAMPLES
+from lanede.data.toy import from_ode, DampedHarmonicOscillator, add_noise
+from lanede.visualize.timeseries import plot_timeseries
+
+# Main settings
+# General settings
+NAME = "oscillator"
+N_TIME_STEPS = 150
+
+# Oscillator settings
+omega = (2 * np.pi * 6) ** 2
+# fmt: off
+spring_matrix = np.array([[omega, 0],
+                          [0, omega]])
+
+damping_matrix = np.array([[0.0, 0],
+                           [0, 0.0]])
+# fmt: on
+
+# Model settings
+name = "simple_douglas"
+cfg = {
+    "dim": 2,
+    "learning": {
+        "optimizer": "RAdam",
+        "lr": 0.01,
+    },
+    "ode": {
+        "activation_fn": "Softplus",
+        "hidden_layer_sizes": [16] * 3,
+        "rtol": 1e-6,
+        "atol": 1e-6,
+        "use_adjoint": False,
+    },
+    "helmholtz": {
+        "hidden_layer_sizes": [16]*3,
+        "activation_fn": "ReLU",
+        "total_weight": 1,
+        "condition_weights": [1.0, 1.0, 1e-6],
+    },
+    "initial_net": {
+        "hidden_layer_sizes": [16] * 3,
+        "activation_fn": "ReLU",
+    },
+    "normalizer": {
+        "type": "MeanStd",
+    },
+}
+# Other settings in the main function
+
+
+def main():
+    # Data
+    oscillator = DampedHarmonicOscillator(spring_matrix, damping_matrix)
+
+    # Train
+    t_data = np.linspace(0, 1, N_TIME_STEPS)
+    x_0 = 1 + np.random.rand(6000, 2) / 10
+    v_0 = np.sqrt(x_0**2) / 10
+    x_data, *_ = from_ode(oscillator, t_data, x_0, v_0)
+    x_data = add_noise(x_data)
+
+    # Test (generate seperately instead of splitting)
+    t_test = t_data
+    x_0_test = 1 + np.random.rand(1000, 2) / 10
+    v_0_test = np.sqrt(x_0_test**2) / 10
+    x_data_test, xdot_data_test, xdotdot_data_test = from_ode(
+        oscillator, t_test, x_0_test, v_0_test
+    )
+    # Add noise to test data
+    x_data_test = add_noise(x_data_test)
+    xdot_data_test = add_noise(xdot_data_test)
+    xdotdot_data_test = add_noise(xdotdot_data_test)
+
+    # Train and save
+    model = LanedeAPI(name, cfg)
+    model.train(t_data, x_data, n_epochs=100, batch_size=128)
+    path = f"saves/{NAME}"
+    model.save(path)
+
+    # Evaluate and plot test data
+    t_plot = np.linspace(0, 1, 1000)  # Higher resolution for curves
+
+    # Get predicted time series with higher resolution
+    x_pred, v_pred = model.predict(t_plot, x_data_test[:, 0, :])
+    t_plot_with_batches = np.tile(t_plot, (x_pred.shape[0], 1))
+    a_pred = model.second_derivative(t_plot_with_batches, x_pred, v_pred)
+
+    # Get true time series with higher resolution
+    x_true, xdot_true, xdotdot_true = from_ode(oscillator, t_plot, x_0_test, v_0_test)
+
+    # Plot
+    pred = (t_plot, x_pred, v_pred, a_pred)
+    data = (t_data, x_data_test, xdot_data_test, xdotdot_data_test)
+    true = (t_plot, x_true, xdot_true, xdotdot_true)
+
+    fig, _ = plot_timeseries(predictions=pred, data=data, true=true, n_random=10)
+
+    plot_path = f"saves/{NAME}/plots"
+    # Stay with strings but use pathlib to create directory
+    Path(plot_path).mkdir(exist_ok=True)
+    fig.savefig(f"{plot_path}/timeseries.png", dpi=600)
+
+
+if __name__ == "__main__":
+    main()
