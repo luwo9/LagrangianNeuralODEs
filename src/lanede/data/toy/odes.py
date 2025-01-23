@@ -15,6 +15,16 @@ from scipy.integrate import solve_ivp
 # need to specify all of: t, x_0, xdot_0, oscillator parameters, etc.
 
 
+# NOTE: The following overlaps with `lanede.core`'s
+# SecondOrderNeuralODE and SolvedSecondOrderNeuralODE, however this
+# code should be able to use numpy. The overlap currently is minimal
+# and removing it would make things more complicated. If in the future
+# the overlap becomes more significant, the ODEs below could be made to
+# inherit `lanede.core.SecondOrderNeuralODE` and integrated using
+# `lanede.core.SolvedSecondOrderNeuralODE`, while translating between
+# numpy and torch as needed.
+
+
 def from_ode(
     ode: ODE, t: np.ndarray, x_0: np.ndarray, xdot_0: np.ndarray, **solve_ivp_kwargs
 ) -> np.ndarray:
