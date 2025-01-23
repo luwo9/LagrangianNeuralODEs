@@ -103,6 +103,7 @@ def plot_timeseries(
 
     Parameters
     ----------
+    
     predictions : tuple[np.ndarray | None], optional
         The predicted state and its derivatives. See Notes for details.
     data : tuple[np.ndarray | None], optional
