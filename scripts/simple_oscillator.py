@@ -61,19 +61,20 @@ cfg = {
 
 
 def main():
+    rng = np.random.default_rng()
     # Data
     oscillator = DampedHarmonicOscillator(spring_matrix, damping_matrix)
 
     # Train
     t_data = np.linspace(0, 1, N_TIME_STEPS)
-    x_0 = 1 + np.random.rand(6000, 2) / 10
+    x_0 = 1 + rng.normal(6000, 2) / 10
     v_0 = np.sqrt(x_0**2) / 10
     x_data, *_ = from_ode(oscillator, t_data, x_0, v_0)
     x_data = add_noise(x_data)
 
     # Test (generate seperately instead of splitting)
     t_test = t_data
-    x_0_test = 1 + np.random.rand(1000, 2) / 10
+    x_0_test = 1 + rng.normal(1000, 2) / 10
     v_0_test = np.sqrt(x_0_test**2) / 10
     x_data_test, xdot_data_test, xdotdot_data_test = from_ode(
         oscillator, t_test, x_0_test, v_0_test
