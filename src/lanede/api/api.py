@@ -62,7 +62,7 @@ class LanedeAPI:
         initial values using the ODE.
     second_derivative(t, x, xdot)
         Computes the second order derivative of the state at time t.
-    helmholtzmetric(t, x, xdot, scalar=True, combined=True)
+    helmholtzmetric(t, x, xdot, scalar=True, individual_metrics=False)
         Computes the metric of fullfilment of the Helmholtz conditions
         for the second order ODE at given points in time and state.
     error(t, x_pred=None, xdot_pred=None, x_true=None, xdot_true=None)
@@ -165,18 +165,18 @@ class LanedeAPI:
             instead of printing it.
 
         The returned dictionary is passed on from the training function.
-        It may have the keys:
+        It always has the keys:
 
         helmholtz : np.ndarray
             The training Helmholtz loss.
         error : np.ndarray
             The training prediction error.
-        validation_helmholtz : np.ndarray
-            The validation Helmholtz loss.
-            (Key only present if validation data is given)
-        validation_error : np.ndarray
-            The validation prediction error.
-            (Key only present if validation data is given)
+
+        Aswell as the keys of the individual helmholtz metrics (see the
+        `helmholtzmetric` method with `individual_metrics=True`).
+
+        If validation data is provided, the dictionary also has the same
+        keys with 'validation_' prepended to them.
         """
         metrics = self._model.train(
             t, x, xdot, n_epochs=n_epochs, batch_size=batch_size, device=device, **kwargs
@@ -249,15 +249,15 @@ class LanedeAPI:
         x: np.ndarray,
         xdot: np.ndarray,
         scalar: bool = True,
-        combined: bool = True,
-    ) -> np.ndarray | tuple[np.ndarray, ...]:
+        individual_metrics: bool = False,
+    ) -> np.ndarray | tuple[np.ndarray, dict[str, np.ndarray]]:
         """
         Computes the metric of fullfilment of the Helmholtz conditions
         for the second order ODE at given points in time and state.
-        Depending on its arguments, it returns either a single metric
-        for all conditions combined or individual metrics for each
-        condition. These may either be for each point supplied or
-        averaged over all points.
+        Depending on its arguments, it returns a single metric for all
+        conditions combined and optionally individual metrics for each
+        condition. These metrics may either be for each point supplied
+        or averaged over all points.
 
         Parameters
         ----------
@@ -271,16 +271,20 @@ class LanedeAPI:
         scalar : bool, default=True
             Whether to return a single scalar metric or a pointwise
             result.
-        combined : bool, default=True
-            Whether to return a single metric for all conditions
-            combined or individual metrics for each condition.
+        individual_metrics : bool, default=False
+            Whether to additionally return individual metrics for each
+            condition.
 
 
         Returns
         -------
 
-        np.ndarray or tuple[np.ndarray, ...], shape (n_batch, n_steps) or scalar
-            The metric for the Helmholtz conditions.
+        np.ndarray, shape scalar or (n_batch, n_steps)
+            The combined metric for the Helmholtz conditions.
+        dict[str, np.ndarray], optional, shapes scalar or
+        (n_batch, n_steps)
+            Individual metrics for the Helmholtz conditions. Returned
+            only if `individual_metrics` is True.
 
         Notes
         -----
@@ -295,7 +299,9 @@ class LanedeAPI:
         metric values might not be directly physically interpretable,
         but only provide a metric.
         """
-        return self._model.helmholtzmetric(t, x, xdot, scalar=scalar, combined=combined)
+        return self._model.helmholtzmetric(
+            t, x, xdot, scalar=scalar, individual_metrics=individual_metrics
+        )
 
     def error(
         self,

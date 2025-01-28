@@ -49,15 +49,15 @@ class HelmholtzMetric(nn.Module, ABC):
         x: torch.Tensor,
         xdot: torch.Tensor,
         scalar: bool = True,
-        combined: bool = True,
-    ) -> torch.Tensor | tuple[torch.Tensor, ...]:
+        individual_metrics: bool = False,
+    ) -> torch.Tensor | tuple[torch.Tensor, dict[str, torch.Tensor]]:
         """
         Computes the metric of fullfilment of the Helmholtz conditions
         for a given second order ODE at given points in time and state.
-        Depending on its arguments, it returns either a single metric
-        for all conditions combined or individual metrics for each
-        condition. These may either be for each point supplied or
-        averaged over all points.
+        Depending on its arguments, it returns a single metric for all
+        conditions combined and optionally individual metrics for each
+        condition. These metrics may either be for each point supplied
+        or averaged over all points.
 
         Parameters
         ----------
@@ -73,16 +73,20 @@ class HelmholtzMetric(nn.Module, ABC):
         scalar : bool, default=True
             Whether to return a single scalar metric or a pointwise
             result.
-        combined : bool, default=True
-            Whether to return a single metric for all conditions
-            combined or individual metrics for each condition.
+        individual_metrics : bool, default=False
+            Whether to additionally return individual metrics for each
+            condition.
 
 
         Returns
         -------
 
-        torch.Tensor or tuple[torch.Tensor, ...], shape (n_batch, n_steps) or scalar
-            The metric for the Helmholtz conditions.
+        torch.Tensor, shape scalar or (n_batch, n_steps)
+            The combined metric for the Helmholtz conditions.
+        dict[str, torch.Tensor], optional, shapes scalar or
+        (n_batch, n_steps)
+            Individual metrics for the Helmholtz conditions. Returned
+            only if `individual_metrics` is True.
         """
         pass
 
@@ -102,6 +106,7 @@ class TryLearnDouglas(HelmholtzMetric):
     The metric is constructed by a sum of the absolute differences of
     both hand sides of the Helmholtz conditions. This metric can act as
     a loss function for training the neural network for g.
+    A measure for non-singularity of g is added as fourth condition.
 
     References
     ----------
@@ -157,16 +162,15 @@ class TryLearnDouglas(HelmholtzMetric):
         x: torch.Tensor,
         xdot: torch.Tensor,
         scalar: bool = True,
-        combined: bool = True,
-    ) -> torch.Tensor | tuple[torch.Tensor, ...]:
+        individual_metrics: bool = False,
+    ) -> torch.Tensor | tuple[torch.Tensor, dict[str, torch.Tensor]]:
         """
         Computes the metric of fullfilment of the Helmholtz conditions
         for a given second order ODE at given points in time and state.
-        Depending on its arguments, it returns either a single metric
-        for all conditions combined or individual metrics for each
-        condition. These may either be for each point supplied or
-        averaged over all points.
-        Also returns a measure for singularity of the g matrix.
+        Depending on its arguments, it returns a single metric for all
+        conditions combined and optionally individual metrics for each
+        condition. These metrics may either be for each point supplied
+        or averaged over all points.
 
         Parameters
         ----------
@@ -182,17 +186,20 @@ class TryLearnDouglas(HelmholtzMetric):
         scalar : bool, default=True
             Whether to return a single scalar metric or a pointwise
             result.
-        combined : bool, default=True
-            Whether to return a single metric for all conditions
-            combined or individual metrics for each condition.
+        individual_metrics : bool, default=False
+            Whether to additionally return individual metrics for each
+            condition.
 
         Returns
         -------
 
-        torch.Tensor or tuple[torch.Tensor, ...], shape (n_batch, n_steps) or scalar
-            The metric for the Helmholtz conditions. If not combined,
-            returns 3 tensors for the Helmoltz conditions and one for
-            the non-singularity of the g matrix. See Notes.
+        torch.Tensor, shape scalar or (n_batch, n_steps)
+            The combined metric for the Helmholtz conditions.
+        dict[str, torch.Tensor], optional, shapes scalar or
+        (n_batch, n_steps)
+            Individual metrics for the Helmholtz conditions. Returned
+            only if `individual_metrics` is True. Contains the keys
+            "H1", "H2", "H3", "non_singular".
 
         Notes
         -----
@@ -214,9 +221,6 @@ class TryLearnDouglas(HelmholtzMetric):
             self._evaluate_helmholtz_conditions(f, t, x, xdot, scalar)
         )
 
-        if not combined:
-            return helmholtz_1, helmholtz_2, helmholtz_3, loss_non_singular
-
         metric = (
             helmholtz_1
             + self._h_2_weight * helmholtz_2
@@ -224,7 +228,18 @@ class TryLearnDouglas(HelmholtzMetric):
             + self._non_singular_weight * loss_non_singular
         )
 
-        return metric
+        if not individual_metrics:
+            return metric
+
+        # Maybe return weighted individual metrics?
+        individual_metrics = {
+            "H1": helmholtz_1,
+            "H2": helmholtz_2,
+            "H3": helmholtz_3,
+            "non_singular": loss_non_singular,
+        }
+
+        return metric, individual_metrics
 
     @property
     def device(self) -> torch.device:

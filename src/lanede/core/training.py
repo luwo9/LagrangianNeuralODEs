@@ -2,11 +2,96 @@
 This module contains the training logic for Lagrangian Neural ODE models.
 """
 
+from collections import defaultdict
+
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
 from .lanedemodels import LagrangianNeuralODEModel
+
+
+_VALIDATION_IDENTIFIER = "validation_"
+
+
+# Simple class to clean up the training loop.
+# Not very general, but serves its purpose.
+class _TrainingInfo:
+    """
+    A simple class to accumulate training information in the training loop.
+    (Mainly `LagrangianNeuralODEModel`'s `update` method output for
+    validation and training.)
+    """
+
+    def __init__(self) -> None:
+        self._stepwise_info = defaultdict(lambda: [0])
+        self._epochwise_info = defaultdict(list)
+        self._n_step_epoch = 0
+
+    def update_epoch(self, **kwargs: torch.Tensor) -> None:
+        """
+        Update with epochwise information.
+        For quantities that are not averaged over the epoch.
+        Should always be called with the same kwarg names.
+        """
+        for key, value in kwargs.items():
+            self._epochwise_info[key].append(value.item())
+
+    def update_step(self, **kwargs: torch.Tensor) -> None:
+        """
+        Update with training information of a training step.
+        For quantities that are averaged over the epoch.
+        Should always be called with the same kwarg names.
+        """
+        # Could check kwargs for consistency and just append 0
+        # to inputs, and initialize self._stepwise_info as
+        # defaultdict(list)
+        if self._n_step_epoch == 0:
+            for value in self._stepwise_info.values():
+                value.append(0)
+
+        for key, value in kwargs.items():
+            self._stepwise_info[key][-1] += value.item()
+
+        self._n_step_epoch += 1
+
+    def end_epoch(self) -> None:
+        """
+        End the current epoch. Must be called immediately after the
+        last training step/`update_step` call in the epoch.
+        """
+        # Compute the mean over the epoch now
+        for value in self._stepwise_info.values():
+            value[-1] /= self._n_step_epoch
+
+        self._n_step_epoch = 0
+
+    def current_info(self) -> dict[str, float]:
+        """
+        Returns the training information of the current epoch.
+        """
+        stepwise = {k: v[-1] for k, v in self._stepwise_info.items()}
+        epochwise = {k: v[-1] for k, v in self._epochwise_info.items()}
+        return stepwise | epochwise
+
+    def numpy_dict(self) -> dict[str, np.ndarray]:
+        """
+        Convert the training information to numpy arrays.
+        """
+        out_dict = self._stepwise_info | self._epochwise_info
+        return {k: np.array(v) for k, v in out_dict.items()}
+
+
+def _format_training_info(info: dict[str, float], validation: bool = False) -> str:
+    """
+    Format the training information for printing.
+    """
+    loss_info = "  |  ".join(
+        f"{k}: {v:.2e}"
+        for k, v in info.items()
+        if k.startswith(_VALIDATION_IDENTIFIER) == validation
+    )
+    return loss_info
 
 
 def train_lagrangian_neural_ode(
@@ -32,7 +117,8 @@ def train_lagrangian_neural_ode(
     train_data : DataLoader
         The training data. Must return a tuple of the form (t, x, xdot).
         Shapes: t: (n_steps,), x: (n_batch, n_steps, n_dim),
-        xdot: (n_batch, n_steps, n_dim).
+        xdot: (n_batch, n_steps, n_dim). x or xdot can be None,
+        as determined by the model.
     n_epochs : int
         The number of epochs to train the model.
     t_validation : torch.Tensor, optional
@@ -53,94 +139,76 @@ def train_lagrangian_neural_ode(
     Returns
     -------
     A dictionary containing the training information.
-    It may have the keys:
+    It always has the keys:
 
         helmholtz : np.ndarray
             The training Helmholtz loss.
         error : np.ndarray
             The training prediction error.
-        validation_helmholtz : np.ndarray
-            The validation Helmholtz loss.
-            (Key only present if validation data is given)
-        validation_error : np.ndarray
-            The validation prediction error.
-            (Key only present if validation data is given)
+
+    Aswell as the keys of the individual helmholtz metrics (as output
+    by `model.update` with `individual_metrics=True`).
+
+    If validation data is provided, the dictionary also has the same
+    keys with 'validation_' prepended to them.
     """
     # TODO: Make out_file work
     validate = t_validation is not None
 
     device = model.device
 
-    out_dict = {
-        "helmholtz": [],
-        "error": [],
-    }
+    info_log = _TrainingInfo()
 
     if validate:
-        out_dict.update(
-            {
-                "validation_helmholtz": [],
-                "validation_error": [],
-            }
-        )
+        t_validation_repeated = t_validation.repeat(x_validation.shape[0], 1)
 
-        t_repeated = t_validation.repeat(x_validation.shape[0], 1)
+    # For nicer printing
+    n_digits = len(str(n_epochs))
 
     for epoch in range(n_epochs):
-
-        n_step = 0
-
-        # Initialize loss as 0 and add to it, to later compute the mean
-        for key in out_dict:
-            out_dict[key].append(0)
 
         for t, x, xdot in train_data:
             t = t.to(device)
             x = x.to(device) if x is not None else None
             xdot = xdot.to(device) if xdot is not None else None
 
-            helmholtz, error = model.update(t, x, xdot)
-
-            out_dict["helmholtz"][-1] += helmholtz.item()
-            out_dict["error"][-1] += error.item()
-
-            n_step += 1
-
-        # Compute the mean over the epoch now
-        out_dict["helmholtz"][-1] /= n_step
-        out_dict["error"][-1] /= n_step
-
-        if epoch % print_every == 0:
-            print(
-                f"Epoch {epoch} - "
-                f"Helmholtz: {out_dict['helmholtz'][-1]:.4f}, "
-                f"Error: {out_dict['error'][-1]:.4f}",
-                file=out_file,
+            helmholtz, error, individual_helmholtz = model.update(
+                t, x, xdot, individual_metrics=True
             )
+
+            info_log.update_step(helmholtz=helmholtz, error=error, **individual_helmholtz)
+
+        info_log.end_epoch()
+
+        # Print training information
+        if epoch % print_every == 0:
+            loss_info = info_log.current_info()
+            loss_info = _format_training_info(loss_info)
+            print(f"Epoch {epoch:>{n_digits}}:   {loss_info}", file=out_file)
 
         if validate and epoch % validation_every == 0:
             x_val_0 = x_validation[:, 0, :] if x_validation is not None else None
             xdot_val_0 = xdot_validation[:, 0, :] if xdot_validation is not None else None
 
             x_val_pred, xdot_val_pred = model.predict(t_validation, x_val_0, xdot_val_0)
-            helmholtz_val = model.helmholtzmetric(t_repeated, x_val_pred, xdot_val_pred)
+            helmholtz_val, individual_helmholtz_val = model.helmholtzmetric(
+                t_validation_repeated, x_val_pred, xdot_val_pred, individual_metrics=True
+            )
             error_val = model.error(
                 t_validation, x_val_pred, xdot_val_pred, x_validation, xdot_validation
             )
 
-            # Since validation is anyways only done per epoch, don't
-            # average here
-            out_dict["validation_helmholtz"][-1] = helmholtz_val.item()
-            out_dict["validation_error"][-1] = error_val.item()
-
-            print(
-                f"Validation Epoch {epoch} - "
-                f"Helmholtz: {out_dict['validation_helmholtz'][-1]:.4f}, "
-                f"Error: {out_dict['validation_error'][-1]:.4f}",
-                file=out_file,
+            individual_helmholtz_val = {
+                (f"{_VALIDATION_IDENTIFIER}{k}"): v for k, v in individual_helmholtz_val.items()
+            }
+            info_log.update_epoch(
+                validation_helmholtz=helmholtz_val,
+                validation_error=error_val,
+                **individual_helmholtz_val,
             )
+            # Print validation information
+            loss_info = info_log.current_info()
+            loss_info = _format_training_info(loss_info, validation=True)
+            print(f"Validation Epoch {epoch:>{n_digits}}:  {loss_info}", file=out_file)
 
-    for key, val in out_dict.items():
-        out_dict[key] = np.array(val)
-
-    return out_dict
+    return info_log.numpy_dict()

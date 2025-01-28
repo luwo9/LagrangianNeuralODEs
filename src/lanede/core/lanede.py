@@ -128,7 +128,7 @@ class LagrangianNeuralODE:
         initial values using the ODE.
     second_derivative(t, x, xdot)
         Computes the second order derivative of the state at time t.
-    helmholtzmetric(t, x, xdot, scalar=True, combined=True)
+    helmholtzmetric(t, x, xdot, scalar=True, individual_metrics=False)
         Computes the metric of fullfilment of the Helmholtz conditions
         for the second order ODE at given points in time and state.
     error(t, x_pred=None, xdot_pred=None, x_true=None, xdot_true=None)
@@ -219,18 +219,19 @@ class LagrangianNeuralODE:
             instead of printing it.
 
         The returned dictionary is passed on from the training function.
-        It may have the keys:
+        It always has the keys:
 
         helmholtz : np.ndarray
             The training Helmholtz loss.
         error : np.ndarray
             The training prediction error.
-        validation_helmholtz : np.ndarray
-            The validation Helmholtz loss.
-            (Key only present if validation data is given)
-        validation_error : np.ndarray
-            The validation prediction error.
-            (Key only present if validation data is given)
+
+        Aswell as the keys of the individual helmholtz metrics (as output
+        by `model.update` (see `__init__`) or the `helmholtzmetric`
+        method with `individual_metrics=True`).
+
+        If validation data is provided, the dictionary also has the same
+        keys with 'validation_' prepended to them.
         """
         # Bring t in shape (n_batch, n_steps) for normalizer
         n_batches = x.shape[0] if x is not None else xdot.shape[0]
@@ -368,15 +369,15 @@ class LagrangianNeuralODE:
         x: np.ndarray,
         xdot: np.ndarray,
         scalar: bool = True,
-        combined: bool = True,
-    ) -> np.ndarray | tuple[np.ndarray, ...]:
+        individual_metrics: bool = False,
+    ) -> np.ndarray | tuple[np.ndarray, dict[str, np.ndarray]]:
         """
         Computes the metric of fullfilment of the Helmholtz conditions
         for the second order ODE at given points in time and state.
-        Depending on its arguments, it returns either a single metric
-        for all conditions combined or individual metrics for each
-        condition. These may either be for each point supplied or
-        averaged over all points.
+        Depending on its arguments, it returns a single metric for all
+        conditions combined and optionally individual metrics for each
+        condition. These metrics may either be for each point supplied
+        or averaged over all points.
 
         Parameters
         ----------
@@ -390,16 +391,20 @@ class LagrangianNeuralODE:
         scalar : bool, default=True
             Whether to return a single scalar metric or a pointwise
             result.
-        combined : bool, default=True
-            Whether to return a single metric for all conditions
-            combined or individual metrics for each condition.
+        individual_metrics : bool, default=False
+            Whether to additionally return individual metrics for each
+            condition.
 
 
         Returns
         -------
 
-        np.ndarray or tuple[np.ndarray, ...], shape (n_batch, n_steps) or scalar
-            The metric for the Helmholtz conditions.
+        np.ndarray, shape scalar or (n_batch, n_steps)
+            The combined metric for the Helmholtz conditions.
+        dict[str, np.ndarray], optional, shapes scalar or
+        (n_batch, n_steps)
+            Individual metrics for the Helmholtz conditions. Returned
+            only if `individual_metrics` is True.
 
         Notes
         -----
@@ -419,12 +424,21 @@ class LagrangianNeuralODE:
         x = torch.tensor(x, dtype=torch.float32)
         xdot = torch.tensor(xdot, dtype=torch.float32)
 
-        metric = self._model.helmholtzmetric(t, x, xdot, scalar=scalar, combined=combined)
+        metrics = self._model.helmholtzmetric(
+            t, x, xdot, scalar=scalar, individual_metrics=individual_metrics
+        )
 
-        if combined:
-            return metric.detach().numpy()
+        if not individual_metrics:
+            return metrics.detach().numpy()
 
-        return tuple(metric_.detach().numpy() for metric_ in metric)
+        metrics_out = []
+        for metric in metrics:
+            if isinstance(metric, torch.Tensor):
+                metrics_out.append(metric.detach().numpy())
+                continue
+            metrics_out.append({k: v.detach().numpy() for k, v in metric.items()})
+
+        return tuple(metrics_out)
 
     def error(
         self,
