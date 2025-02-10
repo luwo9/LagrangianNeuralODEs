@@ -129,6 +129,12 @@ class Normalizer(ABC):
             raise ValueError("At least one of x or xdot must be supplied.")
         if x is not None and xdot is not None:
             self._mode = _OperationMode.BOTH
+            # TODO: Correct implementation for fitting on both state
+            # and derivative. For second order neural odes, the
+            # inferred and manual transformation must coincide.
+            raise NotImplementedError(
+                "Currently, fitting on both state and derivative is not completely implemented."
+            )
         elif x is not None:
             self._mode = _OperationMode.ONLY_STATE
         else:
