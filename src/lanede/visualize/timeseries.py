@@ -8,9 +8,10 @@ from collections.abc import Sequence
 import itertools
 
 import numpy as np
-import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+
+from ._pyplot import subplots_with_custom_row_spacing
 
 
 def _process_data_inputs(
@@ -59,32 +60,6 @@ def _process_data_inputs(
             return n_quantities, n_batch, n_dim, out_data
 
 
-def _subplots_with_custom_row_spacing(n_rows, n_cols, *, row_spacings=None, **kwargs):
-    # Like plt.subplots, but with custom row spacings
-    # May overwrite som kwargs
-    kwargs["squeeze"] = False
-    if row_spacings is None:
-        return plt.subplots(n_rows, n_cols, **kwargs)
-
-    n_gaps = n_rows - 1
-    n_new_rows = n_rows + n_gaps
-    height_ratios = []
-    for spacing in row_spacings:
-        height_ratios.extend([1, spacing])
-    height_ratios.append(1)
-
-    kwargs["height_ratios"] = height_ratios
-    fig, axs = plt.subplots(n_new_rows, n_cols, **kwargs)
-
-    # Turn off spacing axes and remove the gap axs from the array
-    spacing_axes = axs[1::2]
-    for ax in spacing_axes.flatten():
-        ax.axis("off")
-    axs = axs[::2]
-
-    return fig, axs
-
-
 # TODO: Add option to specify units
 def plot_timeseries(
     predictions: tuple[np.ndarray | None, ...] | None = None,
@@ -103,7 +78,7 @@ def plot_timeseries(
 
     Parameters
     ----------
-    
+
     predictions : tuple[np.ndarray | None], optional
         The predicted state and its derivatives. See Notes for details.
     data : tuple[np.ndarray | None], optional
@@ -113,7 +88,7 @@ def plot_timeseries(
     component_names : list[str], optional
         The names of the components of the state. If None, the
         components are named "Component 0", "Component 1", ...
-    n_random : int, optional
+    n_random : int, default=5
         The number of randomly selected time series to plot. If it is
         0, all time series are plotted in order.
 
@@ -171,7 +146,7 @@ def plot_timeseries(
     gap_space = 0.3
     row_spacings = np.full(n_rows - 1, min_space)
     row_spacings[n_quantities - 1 :: n_quantities] = gap_space
-    fig, axs = _subplots_with_custom_row_spacing(
+    fig, axs = subplots_with_custom_row_spacing(
         n_rows,
         n_cols,
         sharex=True,

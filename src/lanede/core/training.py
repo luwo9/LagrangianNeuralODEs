@@ -16,11 +16,9 @@ _VALIDATION_IDENTIFIER = "validation_"
 
 # Simple class to clean up the training loop.
 # Not very general, but serves its purpose.
-class _TrainingInfo:
+class TrainingInfo:
     """
     A simple class to accumulate training information in the training loop.
-    (Mainly `LagrangianNeuralODEModel`'s `update` method output for
-    validation and training.)
     """
 
     def __init__(self) -> None:
@@ -157,7 +155,7 @@ def train_lagrangian_neural_ode(
 
     device = model.device
 
-    info_log = _TrainingInfo()
+    info_log = TrainingInfo()
 
     if validate:
         t_validation_repeated = t_validation.repeat(x_validation.shape[0], 1)

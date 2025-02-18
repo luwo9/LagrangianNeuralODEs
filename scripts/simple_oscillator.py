@@ -15,14 +15,15 @@ from lanede.visualize.timeseries import plot_timeseries
 
 # Main settings
 # General settings
-NAME = "oscillator"
+NAME = "oscillator_helmholtz"
 N_TIME_STEPS = 150
 
 # Oscillator settings
-omega = (2 * np.pi * 6) ** 2
+n_periods = 6
+omega = 2 * np.pi * n_periods
 # fmt: off
-spring_matrix = np.array([[omega, 0],
-                          [0, omega]])
+spring_matrix = np.array([[omega**2, 0],
+                          [0, omega**2]])
 
 damping_matrix = np.array([[0.0, 0],
                            [0, 0.0]])
@@ -44,9 +45,9 @@ cfg = {
         "use_adjoint": False,
     },
     "helmholtz": {
-        "hidden_layer_sizes": [16]*3,
-        "activation_fn": "ReLU",
-        "total_weight": 1,
+        "hidden_layer_sizes": [64] * 2,
+        "activation_fn": "Softplus",
+        "total_weight": 10,
         "condition_weights": [1.0, 1.0, 1e-6],
     },
     "initial_net": {
@@ -67,14 +68,14 @@ def main():
 
     # Train
     t_data = np.linspace(0, 1, N_TIME_STEPS)
-    x_0 = 1 + rng.normal(6000, 2) / 10
+    x_0 = 1 + rng.normal(size=(6000, 2)) / 10
     v_0 = np.sqrt(x_0**2) / 10
     x_data, *_ = from_ode(oscillator, t_data, x_0, v_0)
     x_data = add_noise(x_data)
 
     # Test (generate seperately instead of splitting)
     t_test = t_data
-    x_0_test = 1 + rng.normal(1000, 2) / 10
+    x_0_test = 1 + rng.normal(size=(1000, 2)) / 10
     v_0_test = np.sqrt(x_0_test**2) / 10
     x_data_test, xdot_data_test, xdotdot_data_test = from_ode(
         oscillator, t_test, x_0_test, v_0_test
@@ -86,7 +87,7 @@ def main():
 
     # Train and save
     model = LanedeAPI(name, cfg)
-    model.train(t_data, x_data, n_epochs=100, batch_size=128)
+    model.train(t_data, x_data, n_epochs=500, batch_size=128)
     path = f"saves/{NAME}"
     model.save(path)
 

@@ -53,6 +53,10 @@ Data Normalization:
 Normalizer (abstract)
 MeanStd
 
+Semi-public functions and classes:
+
+make_dataloader
+TrainingInfo
 """
 
 from .neural import NeuralNetwork
@@ -60,8 +64,8 @@ from .neuralodes import SecondOrderNeuralODE, FreeSecondOrderNeuralODE
 from .integratedodes import SolvedSecondOrderNeuralODE
 from .helmholtzmetrics import HelmholtzMetric, TryLearnDouglas
 from .lanedemodels import LagrangianNeuralODEModel, SimultaneousLearnedDouglasOnlyX
-from .lanede import LagrangianNeuralODE
-from .training import train_lagrangian_neural_ode
+from .lanede import LagrangianNeuralODE, make_dataloader
+from .training import train_lagrangian_neural_ode, TrainingInfo
 from .normalize import Normalizer, MeanStd
 
 __all__ = [

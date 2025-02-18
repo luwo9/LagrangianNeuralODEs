@@ -67,10 +67,10 @@ example_simple_douglas_only_x: JSONDict = {
         "use_adjoint": True,
     },
     "helmholtz": {
-        "hidden_layer_sizes": [16, 16],
-        "activation_fn": "ReLU",
+        "hidden_layer_sizes": [64, 64],
+        "activation_fn": "Softplus",
         "total_weight": 100.0,
-        "condition_weights": [1.0, 1.0, 0.1],
+        "condition_weights": [1.0, 1.0, 1e-6],
     },
     "initial_net": {
         "hidden_layer_sizes": [16, 16],
