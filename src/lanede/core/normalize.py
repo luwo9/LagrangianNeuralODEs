@@ -810,7 +810,6 @@ class Normalizer(ABC):
             "not implemented yet."
         )
 
-    @abstractmethod
     def state_dict(self) -> dict:
         """
         Returns the state of the normalizer as a dictionary.
@@ -820,9 +819,8 @@ class Normalizer(ABC):
         dict
             The state of the normalizer.
         """
-        pass
+        return {"operation_mode": self._mode.name}
 
-    @abstractmethod
     def load_state_dict(self, state_dict: dict) -> None:
         """
         Loads the normalizer state from the dictionary.
@@ -832,7 +830,7 @@ class Normalizer(ABC):
         state_dict : dict
             The state of the normalizer.
         """
-        pass
+        self._mode = _OperationMode[state_dict["operation_mode"]]
 
 
 # NOTE: Could add subclass for independent transformation(s), for cases
@@ -970,6 +968,7 @@ class MeanStd(Normalizer):
         )
 
     def state_dict(self) -> dict:
+        state_dict = super().state_dict()
         # Convert the numpy arrays to lists (then e.g. pytorch can
         # handle it better).
         mean_dict = {}
@@ -979,13 +978,16 @@ class MeanStd(Normalizer):
             std = self._stds[name]
             mean_dict[name] = None if mean is None else mean.tolist()
             std_dict[name] = None if std is None else std.tolist()
-        return {"means": mean_dict, "stds": std_dict}
+        state_dict.update({"means": mean_dict, "stds": std_dict})
+        return state_dict
 
     def load_state_dict(self, state_dict: dict) -> None:
-        mean_dict = state_dict["means"]
-        std_dict = state_dict["stds"]
+        mean_dict = state_dict.pop("means")
+        std_dict = state_dict.pop("stds")
         for name in self._names:
             mean = mean_dict[name]
             std = std_dict[name]
             self._means[name] = None if mean is None else np.array(mean)
             self._stds[name] = None if std is None else np.array(std)
+
+        super().load_state_dict(state_dict)
