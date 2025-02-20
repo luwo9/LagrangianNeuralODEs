@@ -132,9 +132,16 @@ def plot_timeseries(
     # Maybe make arguments too:
     quantity_names = ["State", "Derivative", "Second Derivative"]
     plot_kwargs = [
-        {"label": "Predicted", "color": "blue"},
-        {"label": "Data", "color": "black", "marker": ".", "linestyle": "none"},
-        {"label": "True", "color": "blue", "linestyle": "--"},
+        {"label": "True", "color": "red", "linestyle": "-", "linewidth": 1},
+        {"label": "Predicted", "color": "blue", "linewidth": 1},
+        {
+            "label": "Data",
+            "color": "black",
+            "marker": "+",
+            "linestyle": "none",
+            "markersize": 3,
+            "mew": 0.6,
+        },
     ]
 
     # Set up the plot
@@ -176,7 +183,7 @@ def plot_timeseries(
 
     # Go through the data by interpretation
     # (This involves sevaral loops, but is faster and more readable)
-    for data_, plot_kwargs in zip((predictions, data, true), plot_kwargs):
+    for data_, plot_kwargs in zip((true, predictions, data), plot_kwargs):
 
         time = data_[0]
         if time is None:  # No data at all, skip this type completely
