@@ -449,8 +449,15 @@ class SimultaneousLearnedDouglasOnlyX(LagrangianNeuralODEModel):
         regression_loss = self._error(t, x_pred, xdot_pred, x, xdot)
 
         n_batch = x.shape[0]
+        
+        # Detach, as gradients should only affect f via its explicit
+        # appearance in the metric, not implicitly via the prediction
+        # of the trajectory.
         helmholtz_metrics = self._helmholtzmetric(
-            t.repeat(n_batch, 1), x_pred, xdot_pred, individual_metrics=individual_metrics
+            t.repeat(n_batch, 1),
+            x_pred.detach(),
+            xdot_pred.detach(),
+            individual_metrics=individual_metrics,
         )
         if individual_metrics:
             helmholtz_loss, individual_helmholtz_metrics = helmholtz_metrics
