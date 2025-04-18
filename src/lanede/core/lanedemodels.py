@@ -9,10 +9,13 @@ from collections.abc import Callable
 
 import torch
 import torch.nn as nn
+from torch.optim import Optimizer
+from torch.optim.lr_scheduler import LRScheduler
 
 from .helmholtzmetrics import TryLearnDouglas
 from .integratedodes import SolvedSecondOrderNeuralODE
 from .neural import NeuralNetwork
+from .temporal_schedulers import TemporalScheduler
 
 
 # NOTE: Maybe n_dim is not strictly required below, if e.g. z is
@@ -341,9 +344,11 @@ class SimultaneousLearnedDouglasOnlyX(LagrangianNeuralODEModel):
         neural_ode: SolvedSecondOrderNeuralODE,
         helmholtz_metric: TryLearnDouglas,
         xdot_0_network: NeuralNetwork,
-        common_optimizer: torch.optim.Optimizer,
-        helmholtz_weight: float = 1e2,
+        common_optimizer: Optimizer,
+        helmholtz_weight: float = 1.0,
         x_loss_function: Callable | None = None,
+        lr_scheduler: LRScheduler | None = None,
+        temporal_scheduler: TemporalScheduler | None = None,
     ) -> None:
         """
         Initializes the model.
@@ -360,7 +365,7 @@ class SimultaneousLearnedDouglasOnlyX(LagrangianNeuralODEModel):
             The neural network that predicts the initial condition of
             the derivative of the state from the initial state. Must
             map n_dim to n_dim.
-        common_optimizer : torch.optim.Optimizer
+        common_optimizer : Optimizer
             The optimizer to be used to update the neural ODE, the
             Helmholtz metric and the initial condition network.
             Must be initialized with the parameters of all three.
@@ -370,6 +375,15 @@ class SimultaneousLearnedDouglasOnlyX(LagrangianNeuralODEModel):
         x_loss_function : Callable, optional
             The loss function to use for the prediction error.
             If None, then torch.nn.MSELoss is used.
+        lr_scheduler : LRScheduler, optional
+            A scheduler to use for the learning rate. Must be initialized
+            with the optimizer. It is called each update step with the
+            value of the Helmholtz metric as the loss metric. Thus, its
+            `.step()` method should expect such a value.
+        temporal_scheduler : TemporalScheduler, optional
+            A temporal scheduler that determines the fraction of time
+            steps to use for updating the neural ODE in each training
+            step. If None, then all time steps are used in all steps.
 
         Notes
         -----
@@ -381,12 +395,18 @@ class SimultaneousLearnedDouglasOnlyX(LagrangianNeuralODEModel):
         All models are moved to be on the device of the neural ODE.
         """
         super().__init__()
+        self._n_train_steps = 0
+
         self._neural_ode = neural_ode
         self._helmholtz_metric = helmholtz_metric
         self._xdot_network = xdot_0_network
         self._optimizer = common_optimizer
         self._helmholtz_weight = helmholtz_weight
         self._x_loss_function = torch.nn.MSELoss() if x_loss_function is None else x_loss_function
+        # TODO: Add option what is the metric for the scheduler?
+        self._lr_scheduler = lr_scheduler
+        self._temporal_scheduler = temporal_scheduler
+
         # Enforce single device for all components
         device = self._neural_ode.device
         self._helmholtz_metric.to(device)
@@ -442,6 +462,8 @@ class SimultaneousLearnedDouglasOnlyX(LagrangianNeuralODEModel):
 
         They are detached from the computation graph.
         """
+        t, x, xdot = self._get_time_series_fraction(t, x, xdot)
+
         x_0 = x[:, 0, :] if x is not None else None
         xdot_0_pred = xdot[:, 0, :] if xdot is not None else None
         x_pred, xdot_pred = self._predict(t, x_0, xdot_0_pred)
@@ -449,7 +471,7 @@ class SimultaneousLearnedDouglasOnlyX(LagrangianNeuralODEModel):
         regression_loss = self._error(t, x_pred, xdot_pred, x, xdot)
 
         n_batch = x.shape[0]
-        
+
         # Detach, as gradients should only affect f via its explicit
         # appearance in the metric, not implicitly via the prediction
         # of the trajectory.
@@ -464,10 +486,21 @@ class SimultaneousLearnedDouglasOnlyX(LagrangianNeuralODEModel):
         else:
             helmholtz_loss = helmholtz_metrics
 
-        total_loss = regression_loss + self._helmholtz_weight * helmholtz_loss
         self._optimizer.zero_grad()
-        total_loss.backward()
+        # Currently helmholtz_loss and regression_loss are
+        # backpropagated separately, to allow clipping only the
+        # gradients of the Helmholtz metric. Could be changed later
+        # for an efficiency gain.
+        (self._helmholtz_weight * helmholtz_loss).backward()
+        # Clip gradients of the Helmholtz metric for stability
+        torch.nn.utils.clip_grad_norm_(self._neural_ode.parameters(), 5)
+        torch.nn.utils.clip_grad_norm_(self._helmholtz_metric.parameters(), 5)
+        regression_loss.backward()
         self._optimizer.step()
+        self._n_train_steps += 1
+
+        if self._lr_scheduler is not None:
+            self._lr_scheduler.step(helmholtz_loss.detach())
 
         # Clone should not be necessary
         helmholtz_loss = helmholtz_loss.detach()
@@ -548,3 +581,17 @@ class SimultaneousLearnedDouglasOnlyX(LagrangianNeuralODEModel):
         # See helmholtzmetric
         f = self._neural_ode.second_order_function
         return self._helmholtz_metric.forward(f, t, x, xdot, scalar, individual_metrics)
+
+    def _get_time_series_fraction(
+        self, t: torch.Tensor, x: torch.Tensor | None = None, xdot: torch.Tensor | None = None
+    ) -> tuple[torch.Tensor, torch.Tensor | None, torch.Tensor | None]:
+        if self._temporal_scheduler is None:
+            return t, x, xdot
+        # Cut time series after number of time steps given by the
+        # temporal scheduler
+        ratio_train = self._temporal_scheduler.get_ratio(self._n_train_steps)
+        n_train = int(ratio_train * t.shape[0])
+        t = t[:n_train]
+        x = x[:, :n_train, :] if x is not None else None
+        xdot = xdot[:, :n_train, :] if xdot is not None else None
+        return t, x, xdot

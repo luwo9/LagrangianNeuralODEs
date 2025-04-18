@@ -46,6 +46,8 @@ Training:
 ---------
 
 train_lagrangian_neural_ode
+TemporalScheduler (abstract)
+SigmoidTemporalScheduler
 
 Data Normalization:
 -------------------
@@ -66,6 +68,7 @@ from .helmholtzmetrics import HelmholtzMetric, TryLearnDouglas
 from .lanedemodels import LagrangianNeuralODEModel, SimultaneousLearnedDouglasOnlyX
 from .lanede import LagrangianNeuralODE, make_dataloader
 from .training import train_lagrangian_neural_ode, TrainingInfo
+from .temporal_schedulers import TemporalScheduler, SigmoidTemporalScheduler
 from .normalize import Normalizer, MeanStd
 
 __all__ = [
@@ -79,6 +82,8 @@ __all__ = [
     "SimultaneousLearnedDouglasOnlyX",
     "LagrangianNeuralODE",
     "train_lagrangian_neural_ode",
+    "TemporalScheduler",
+    "SigmoidTemporalScheduler",
     "Normalizer",
     "MeanStd",
 ]

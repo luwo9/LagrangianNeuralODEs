@@ -4,6 +4,8 @@ This module contains logic for creating predefined
 """
 
 import torch
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+
 from lanede.core import (
     NeuralNetwork,
     FreeSecondOrderNeuralODE,
@@ -11,6 +13,7 @@ from lanede.core import (
     TryLearnDouglas,
     SimultaneousLearnedDouglasOnlyX,
     LagrangianNeuralODE,
+    SigmoidTemporalScheduler,
     MeanStd,
 )
 
@@ -57,19 +60,23 @@ example_simple_douglas_only_x: JSONDict = {
     "dim": 3,
     "learning": {
         "optimizer": "RAdam",
-        "lr": 0.01,
+        "lr": 0.05,
+        "sheduler_patience": 2000,
+        "sheduler_factor": 0.5,
+        "sheduler_threshold": 1e-2,
+        "half_time_series_steps": 1200,
     },
     "ode": {
         "activation_fn": "Softplus",
         "hidden_layer_sizes": [16, 16],
         "rtol": 1e-6,
         "atol": 1e-6,
-        "use_adjoint": True,
+        "use_adjoint": False,
     },
     "helmholtz": {
         "hidden_layer_sizes": [64, 64],
         "activation_fn": "Softplus",
-        "total_weight": 100.0,
+        "total_weight": 1.0,
         "condition_weights": [1.0, 1.0, 1e-6],
     },
     "initial_net": {
@@ -120,6 +127,7 @@ def simple_douglas_only_x(config: JSONDict) -> LagrangianNeuralODE:
     activation_fn = _activation_fn_map[initial_net_config["activation_fn"]]
     initial_net = NeuralNetwork(dim, hidden_layer_sizes, dim, activation_fn)
 
+    # Assemble optimizer
     optimizer = _optimizer_map[config["learning"]["optimizer"]]
     lr = config["learning"]["lr"]
     all_params = (
@@ -127,7 +135,27 @@ def simple_douglas_only_x(config: JSONDict) -> LagrangianNeuralODE:
     )
     optimizer = optimizer(all_params, lr=lr)
 
+    # Assemble learning rate scheduler
+    patience = config["learning"]["sheduler_patience"]
+    factor = config["learning"]["sheduler_factor"]
+    threshold = config["learning"]["sheduler_threshold"]
+    lr_scheduler = ReduceLROnPlateau(
+        optimizer, patience=patience, factor=factor, threshold=threshold
+    )
+
+    # Assemble temporal scheduler
+    half_at = config["learning"]["half_time_series_steps"]
+    temporal_scheduler = SigmoidTemporalScheduler(half_at)
+
     total_weight = helmholtz_config["total_weight"]
-    model = SimultaneousLearnedDouglasOnlyX(ode, metric, initial_net, optimizer, total_weight)
+    model = SimultaneousLearnedDouglasOnlyX(
+        ode,
+        metric,
+        initial_net,
+        optimizer,
+        total_weight,
+        lr_scheduler=lr_scheduler,
+        temporal_scheduler=temporal_scheduler,
+    )
 
     return LagrangianNeuralODE(model, normalizer)

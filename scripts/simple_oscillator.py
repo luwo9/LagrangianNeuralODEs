@@ -11,12 +11,13 @@ import numpy as np
 
 from lanede.api import LanedeAPI, EXAMPLES
 from lanede.data.toy import from_ode, DampedHarmonicOscillator, add_noise
-from lanede.visualize.timeseries import plot_timeseries
+from lanede.visualize import plot_timeseries
 
 # Main settings
 # General settings
 NAME = "oscillator_helmholtz"
 N_TIME_STEPS = 150
+NOISE_LEVEL_DATA = 0.05
 
 # Oscillator settings
 n_periods = 6
@@ -35,11 +36,15 @@ cfg = {
     "dim": 2,
     "learning": {
         "optimizer": "RAdam",
-        "lr": 0.01,
+        "lr": 0.05,
+        "sheduler_patience": 2000,
+        "sheduler_factor": 0.5,
+        "sheduler_threshold": 1e-2,
+        "half_time_series_steps": 1200,
     },
     "ode": {
         "activation_fn": "Softplus",
-        "hidden_layer_sizes": [16] * 3,
+        "hidden_layer_sizes": [16] * 2,
         "rtol": 1e-6,
         "atol": 1e-6,
         "use_adjoint": False,
@@ -47,7 +52,7 @@ cfg = {
     "helmholtz": {
         "hidden_layer_sizes": [64] * 2,
         "activation_fn": "Softplus",
-        "total_weight": 10,
+        "total_weight": 1,
         "condition_weights": [1.0, 1.0, 1e-6],
     },
     "initial_net": {
@@ -71,7 +76,7 @@ def main():
     x_0 = 1 + rng.normal(size=(6000, 2)) / 10
     v_0 = np.sqrt(x_0**2) / 10
     x_data, *_ = from_ode(oscillator, t_data, x_0, v_0)
-    x_data = add_noise(x_data)
+    x_data = add_noise(x_data, NOISE_LEVEL_DATA)
 
     # Test (generate seperately instead of splitting)
     t_test = t_data
@@ -81,13 +86,13 @@ def main():
         oscillator, t_test, x_0_test, v_0_test
     )
     # Add noise to test data
-    x_data_test = add_noise(x_data_test)
-    xdot_data_test = add_noise(xdot_data_test)
-    xdotdot_data_test = add_noise(xdotdot_data_test)
+    x_data_test = add_noise(x_data_test, NOISE_LEVEL_DATA)
+    xdot_data_test = add_noise(xdot_data_test, NOISE_LEVEL_DATA)
+    xdotdot_data_test = add_noise(xdotdot_data_test, NOISE_LEVEL_DATA)
 
     # Train and save
     model = LanedeAPI(name, cfg)
-    model.train(t_data, x_data, n_epochs=500, batch_size=128)
+    model.train(t_data, x_data, n_epochs=600, batch_size=128, device="cpu")
     path = f"saves/{NAME}"
     model.save(path)
 
