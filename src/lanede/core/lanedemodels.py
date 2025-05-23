@@ -493,18 +493,20 @@ class SimultaneousLearnedDouglasOnlyX(LagrangianNeuralODEModel):
         # for an efficiency gain.
         (self._helmholtz_weight * helmholtz_loss).backward()
         # Clip gradients of the Helmholtz metric for stability
-        torch.nn.utils.clip_grad_norm_(self._neural_ode.parameters(), 5)
+        torch.nn.utils.clip_grad_norm_(self._neural_ode.parameters(), 0.05)
         torch.nn.utils.clip_grad_norm_(self._helmholtz_metric.parameters(), 5)
         regression_loss.backward()
         self._optimizer.step()
         self._n_train_steps += 1
 
-        if self._lr_scheduler is not None:
-            self._lr_scheduler.step(helmholtz_loss.detach())
-
         # Clone should not be necessary
         helmholtz_loss = helmholtz_loss.detach()
         regression_loss = regression_loss.detach()
+
+        # Make a LR scheduler step.
+        scheduler_metric = regression_loss if self._helmholtz_weight == 0 else helmholtz_loss
+        if self._lr_scheduler is not None:
+            self._lr_scheduler.step(scheduler_metric)
 
         if not individual_metrics:
             return helmholtz_loss, regression_loss
@@ -591,6 +593,7 @@ class SimultaneousLearnedDouglasOnlyX(LagrangianNeuralODEModel):
         # temporal scheduler
         ratio_train = self._temporal_scheduler.get_ratio(self._n_train_steps)
         n_train = int(ratio_train * t.shape[0])
+        n_train = max(n_train, 1)
         t = t[:n_train]
         x = x[:, :n_train, :] if x is not None else None
         xdot = xdot[:, :n_train, :] if xdot is not None else None
