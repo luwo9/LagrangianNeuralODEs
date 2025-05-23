@@ -53,7 +53,7 @@ cfg = {
         "hidden_layer_sizes": [64] * 2,
         "activation_fn": "Softplus",
         "total_weight": 1,
-        "condition_weights": [1.0, 1.0, 1e-6],
+        "condition_weights": [1.0, 1.0],
     },
     "initial_net": {
         "hidden_layer_sizes": [16] * 3,

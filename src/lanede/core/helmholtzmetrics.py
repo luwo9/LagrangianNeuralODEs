@@ -104,10 +104,10 @@ class TryLearnDouglas(HelmholtzMetric):
     Uses the Helmholtz conditions after Douglas (see [1]_).
     The matrix g is represented by a neural network.
     The metric is constructed by a sum of the squared differences of
-    both hand sides of the Helmholtz conditions, relative to the L2
+    both hand sides of the Helmholtz conditions, relative to the L(-2)
     operator norm of g. This metric can act as a loss function for
-    training the neural network for g. A measure for non-singularity of
-    g is added as fourth condition.
+    training the neural network for g. The L(-2) normalization ensures
+    appropriate non-singularity of g and a certain scale invariance.
 
     Additional Methods
     ------------------
@@ -126,7 +126,7 @@ class TryLearnDouglas(HelmholtzMetric):
         neural_network: nn.Module,
         h_2_weight: float = 1.0,
         h_3_weight: float = 1.0,
-        non_singular_weight: float = 1e-6,
+        metric_clip_func: Callable = None,
     ) -> None:
         """
         Initializes the metric.
@@ -142,8 +142,10 @@ class TryLearnDouglas(HelmholtzMetric):
             The relative weight for the second Helmholtz condition in the loss (see notes).
         h_3_weight : float, default=1.0
             The relative weight for the third Helmholtz condition in the loss (see notes).
-        non_singular_weight : float, default=1e-6
-            The relative weight to ensure that the matrix g is non-singular.
+        metric_clip_func : Callable, optional
+            A function to clip each metric with. None (default) means 10*tanh(x/10).
+            Useful to prevent exploding values.
+
 
         Notes
         -----
@@ -160,7 +162,9 @@ class TryLearnDouglas(HelmholtzMetric):
         self._neural_network = neural_network
         self._h_2_weight = h_2_weight
         self._h_3_weight = h_3_weight
-        self._non_singular_weight = non_singular_weight
+        self._clip_func = metric_clip_func
+        if self._clip_func is None:
+            self._clip_func = lambda x: 10 * torch.tanh(x / 10)
 
     def forward(
         self,
@@ -175,7 +179,7 @@ class TryLearnDouglas(HelmholtzMetric):
         Computes the metric of fullfilment of the Helmholtz conditions
         for a given second order ODE at given points in time and state.
         Depending on its arguments, it returns a single metric for all
-        conditions combined and optionally individual metrics for each
+        conditions combined and optionally, individual metrics for each
         condition. These metrics may either be for each point supplied
         or averaged over all points.
 
@@ -206,7 +210,7 @@ class TryLearnDouglas(HelmholtzMetric):
         (n_batch, n_steps)
             Individual metrics for the Helmholtz conditions. Returned
             only if `individual_metrics` is True. Contains the keys
-            "H1", "H2", "H3", "non_singular".
+            "H1", "H2" and "H3".
 
         Notes
         -----
@@ -216,25 +220,17 @@ class TryLearnDouglas(HelmholtzMetric):
 
         Internaly torch.func is used, so f should be side-effect free.
         See [1]_ for more information.
-        The singularity measure is the absolute value of the
-        inverse of the determinant of the g matrix, relative to the
-        L2 operator norm of g.
 
         References
         ----------
 
         .. [1] PyTorch documentation: UX Limitations https://pytorch.org/docs/stable/func.ux_limitations.html
         """
-        helmholtz_1, helmholtz_2, helmholtz_3, loss_non_singular = (
-            self._evaluate_helmholtz_conditions(f, t, x, xdot, scalar)
+        helmholtz_1, helmholtz_2, helmholtz_3 = self._evaluate_helmholtz_conditions(
+            f, t, x, xdot, scalar
         )
 
-        metric = (
-            helmholtz_1
-            + self._h_2_weight * helmholtz_2
-            + self._h_3_weight * helmholtz_3
-            + self._non_singular_weight * loss_non_singular
-        )
+        metric = helmholtz_1 + self._h_2_weight * helmholtz_2 + self._h_3_weight * helmholtz_3
 
         if not individual_metrics:
             return metric
@@ -244,7 +240,6 @@ class TryLearnDouglas(HelmholtzMetric):
             "H1": helmholtz_1,
             "H2": helmholtz_2,
             "H3": helmholtz_3,
-            "non_singular": loss_non_singular,
         }
 
         return metric, individual_metrics
@@ -302,9 +297,8 @@ class TryLearnDouglas(HelmholtzMetric):
         Evaluate the Helmholtz conditions for a given second order ODE
         at given points in time and state. Returns the square of the
         difference of left and right hand side of the Helmholtz
-        conditions, relative to the L2 operator norm of the g matrix.
-        Also returns a measure for singularity of the g matrix.
-        Averaged according to `scalar`.
+        conditions, relative to the L(-2) operator norm of the g
+        matrix. Averaged according to `scalar`.
 
         Parameters
         ----------
@@ -327,25 +321,20 @@ class TryLearnDouglas(HelmholtzMetric):
         -------
 
         torch.Tensor, shape (n_batch, n_steps) or scalar
-            The difference of the left and right hand side of the
-            first Helmholtz condition. (Absolute value)
+            The squared difference of the left and right hand side of
+            the first Helmholtz condition.
         torch.Tensor, shape (n_batch, n_steps) or scalar
-            The difference of the left and right hand side of the
-            second Helmholtz condition. (Absolute value)
+            The squared difference of the left and right hand side of
+            the second Helmholtz condition.
         torch.Tensor, shape (n_batch, n_steps) or scalar
-            The difference of the left and right hand side of the
-            third Helmholtz condition. (Absolute value)
-        torch.Tensor, shape (n_batch, n_steps) or scalar
-            The measure for singularity of the g matrix.
+            The squared difference of the left and right hand side of
+            the third Helmholtz condition.
 
         Notes
         -----
 
         Internaly torch.func is used, so f should be side-effect free.
         See [1]_ for more information.
-        The singularity measure is the absolute value of the
-        inverse of the determinant of the g matrix, relative to the
-        L2 operator norm of g.
 
         References
         ----------
@@ -362,12 +351,9 @@ class TryLearnDouglas(HelmholtzMetric):
             f, t, x, xdot
         )
         # shapes: f: (n_batch, n_step, n_dim), rest: (n_batch, n_step, n_dim, n_dim)
-        g, total_derivative_of_g, g_jacobian_v, loss_non_singular = self._compute_g_terms(
-            t, x, xdot, f_values
-        )
+        g, total_derivative_of_g, g_jacobian_v = self._compute_g_terms(t, x, xdot, f_values)
         # shapes: g and dg/dt: (n_batch, n_steps, n_dim, n_dim),
         # jacobian: (n_batch, n_steps, n_dim, n_dim, n_dim),
-        # loss: (n_batch, n_steps)
 
         # H1: gPhi - (gPhi)^T
         jacobian_v_squared = torch.einsum("abik,abkj->abij", jacobian_v, jacobian_v)
@@ -386,20 +372,25 @@ class TryLearnDouglas(HelmholtzMetric):
         helmholtz_3 = g_jacobian_v - g_jacobian_v.transpose(-2, -1)
 
         # The metrics for the Helmholtz conditions are defined relative
-        # to the (operator) norm of the g matrix.
+        # to the -2 (operator) norm of the g matrix.
+        
+        # TODO: Use torch.linalg.eigvalsh and an analytical formula (2D)
+        # to get the smallest absolute eigenvalue of g more efficiently.
         epsilon = 1e-6
-        inverse_norm_g = 1 / (torch.linalg.matrix_norm(g, ord=2) + epsilon)
-        loss_non_singular = loss_non_singular * inverse_norm_g
+        inverse_norm_g = 1 / (torch.linalg.matrix_norm(g, ord=-2) + epsilon)
+
         helmholtz_1 = torch.einsum("abij,ab->abij", helmholtz_1, inverse_norm_g)
         helmholtz_2 = torch.einsum("abij,ab->abij", helmholtz_2, inverse_norm_g)
         helmholtz_3 = torch.einsum("abijk,ab->abijk", helmholtz_3, inverse_norm_g)
+        # Clip to prevent exploding values
+        helmholtz_1 = self._clip_func(helmholtz_1)
+        helmholtz_2 = self._clip_func(helmholtz_2)
+        helmholtz_3 = self._clip_func(helmholtz_3)
 
         # Take mean according to "scalar"
         if scalar:
             dim_h1h2 = (0, 1, 2, 3)
             dim_h3 = (0, 1, 2, 3, 4)
-
-            loss_non_singular = torch.mean(loss_non_singular)
         else:
             dim_h1h2 = (2, 3)
             dim_h3 = (2, 3, 4)
@@ -408,7 +399,7 @@ class TryLearnDouglas(HelmholtzMetric):
         helmholtz_2 = torch.mean(helmholtz_2**2, dim=dim_h1h2)
         helmholtz_3 = torch.mean(helmholtz_3**2, dim=dim_h3)
 
-        return helmholtz_1, helmholtz_2, helmholtz_3, loss_non_singular
+        return helmholtz_1, helmholtz_2, helmholtz_3
 
     def _compute_f_terms(
         self, f: Callable, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor
@@ -429,7 +420,7 @@ class TryLearnDouglas(HelmholtzMetric):
             return result, result
 
         fn = restore_dims_from_vmap(double_result, (0, 0))
-        # Returns (df/dx, df/dv), f
+        # Returns (df/dx, df/dv), f:
         fn = torch.func.jacrev(fn, argnums=(1, 2), has_aux=True)
 
         def double_result2(t, x, v):
@@ -438,7 +429,7 @@ class TryLearnDouglas(HelmholtzMetric):
             jacobian_v = jacobians[1]
             return jacobian_v, (jacobians, result)
 
-        # Returns (d^2d/dtdv (partial), d^2f/dxdv, d^2f/dv^2), ((df/dx, df/dv), f)
+        # Returns (d^2d/dtdv (partial), d^2f/dxdv, d^2f/dv^2), ((df/dx, df/dv), f):
         fn2 = torch.func.jacrev(double_result2, argnums=(0, 1, 2), has_aux=True)
         # vmap over first two dims as they are batch dims
         # otherwise jacrev would compute the jacobian also w.r.t. the batch dims
@@ -459,28 +450,21 @@ class TryLearnDouglas(HelmholtzMetric):
         self, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor, xdotdot: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         # Compute the g matrix and its derivatives.
-        # Uses only a single autograd pass. Returns a loss term to enforce
-        # non-singularity of g for all points.
+        # Uses only a single autograd pass.
 
         # NOTE: G must be symmetric and non-singular.
-        # While parametrizing a symmetric matrix is trivial (see below)
-        # and ensuring non-singularity is possible by learning in a suitable
-        # PLU decomposition, I have not found a way to enforce both
-        # constraints simultaneously.
+        # Doing so by construction is possible (e.g., spectral decomposition
+        # combined with matrix exponentials and canonical form of O(n)
+        # matrices), but usually requires a mapping R -> {-1,1}, which is not
+        # really compatible with gradient descent. Also one may get singular/
+        # ill-conditioned matrices.
         #
-        # An idea would be to learn g=Q^TDQ, where Q is orthogonal
-        # (e.g. via matrix exponential of skew-symmetric matrix) and D is
-        # the diagonal matrix of eigenvalues. However, for an in general
-        # indefinite matrix g, the eigenvalues can be any number but zero,
-        # where it is hard to find a proper way to enforce this by
-        # construction.
-        #
-        # Therefore symmetry is by construction and non-singularity by adding
-        # a loss term.
+        # Therefore, symmetry is by construction and non-singularity via
+        # appropriate scaling of the loss.
         #
         # Thus, the neural network outputs the number of independent parameters
         # of a symmetric matrix and it is then assembled for computation.
-
+        #
         # For a slightly more efficient computation, all derivatives
         # are computed only of the independent parameters, not the full
         # matrix.
@@ -491,7 +475,7 @@ class TryLearnDouglas(HelmholtzMetric):
             return result, result
 
         fn = restore_dims_from_vmap(double_result, (0, 0))
-        # Returns (dg/dt (partial), dg/dx, dg/dv), g
+        # Returns (dg/dt (partial), dg/dx, dg/dv), g:
         fn = torch.func.jacrev(fn, argnums=(0, 1, 2), has_aux=True)
         fn = torch.func.vmap(fn, in_dims=0, out_dims=0)
         fn = torch.func.vmap(fn, in_dims=0, out_dims=0)
@@ -521,13 +505,7 @@ class TryLearnDouglas(HelmholtzMetric):
             jacobian_t, jacobian_x, jacobian_v, xdot, xdotdot
         )
 
-        # Loss term to enforce non-singularity of g.
-        # Penalize 0 determinant directly, this is more efficient than
-        # doing it e.g. in Q^TDQ decomposition
-        det_g = torch.det(g)
-        loss_non_singular = torch.abs(1 / det_g)
-
-        return g, total_derivative_of_g, jacobian_v, loss_non_singular
+        return g, total_derivative_of_g, jacobian_v
 
     def _evaluate_network(self, t, x, v) -> torch.Tensor:
         # NOTE: The output of the neural network is scaled by a hyperbolic sine.
