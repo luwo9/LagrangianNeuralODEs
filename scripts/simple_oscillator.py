@@ -36,7 +36,7 @@ cfg = {
     "dim": 2,
     "learning": {
         "optimizer": "RAdam",
-        "lr": 0.05,
+        "lr": 0.07,
         "sheduler_patience": 2000,
         "sheduler_factor": 0.5,
         "sheduler_threshold": 1e-2,
@@ -44,7 +44,7 @@ cfg = {
     },
     "ode": {
         "activation_fn": "Softplus",
-        "hidden_layer_sizes": [16] * 2,
+        "hidden_layer_sizes": [16] * 1,
         "rtol": 1e-6,
         "atol": 1e-6,
         "use_adjoint": False,
