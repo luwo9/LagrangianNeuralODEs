@@ -3,6 +3,11 @@ This script investigates the behaviour of `lanede.core.TryLearnDouglas`
 when measuring the Helmholtz conditions of harmonic oscillator data.
 """
 
+# DEPRECATED SCRIPT. Use douglas_metric_analytic.py instead.
+print(
+    "This script is deprecated. Use scripts/douglas_metric_analytic.py instead."
+)
+
 # NOTE: This script uses the core package directly and is thus somewhat
 #       more low-level. It could be rewritten to use the API by
 #       defining a suitable (mock) LagrangianNeuralODEModel, but this
@@ -38,7 +43,7 @@ damping_matrix = np.array([[omega, 0],
 # fmt: on
 
 # Model settings
-hidden_layer_sizes = [64] * 2
+hidden_layer_sizes = [64] * 3
 
 
 def _format_training_info(info: dict[str, float]) -> str:
@@ -76,6 +81,12 @@ def train_metric(
     if len(list(f.parameters())) != 0:
         raise ValueError("The ODE must not have trainable parameters.")
 
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        factor=0.5,
+        patience=30,
+        threshold=1e-2,
+    )
     device = metric.device
     f_old_device = f.device
     f = f.to(device)
@@ -101,12 +112,14 @@ def train_metric(
                 f, t_with_batches, x, xdot, individual_metrics=True
             )
             helmholtz_loss.backward()
+            torch.nn.utils.clip_grad_norm_(metric.parameters(), 10)
             optimizer.step()
 
             info_log.update_step(helmholtz_metric=helmholtz_loss, **individual_helmholtz)
 
         info_log.end_epoch()
 
+        scheduler.step(info_log.current_info()["helmholtz_metric"])
         loss_info = _format_training_info(info_log.current_info())
         print(f"Epoch {epoch:>{n_digits}}:   {loss_info}")
 
@@ -183,8 +196,8 @@ def main():
     neural_net = NeuralNetwork(
         2 * n_dim + 1, hidden_layer_sizes, (n_dim * (n_dim + 1)) // 2, torch.nn.Softplus
     )
-    metric = TryLearnDouglas(neural_net, 1.0, 1.0, 1e-7)
-    optimizer = RAdam(metric.parameters(), lr=0.001)
+    metric = TryLearnDouglas(neural_net, 1.0, 1.0)
+    optimizer = RAdam(metric.parameters(), lr=0.003)
 
     # The ODE function to measure the Helmholtz conditions of
     ode_check = HarmonicOscillatorODE(

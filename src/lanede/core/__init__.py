@@ -36,6 +36,7 @@ Lagrangian Neural ODE Models:
 
 LagrangianNeuralODEModel (abstract)
 SimultaneousLearnedDouglasOnlyX
+DouglasOnFixedODE
 
 Lagrangian Neural ODE:
 ----------------------
@@ -54,6 +55,7 @@ Data Normalization:
 
 Normalizer (abstract)
 MeanStd
+Identity
 
 Semi-public functions and classes:
 
@@ -65,11 +67,11 @@ from .neural import NeuralNetwork
 from .neuralodes import SecondOrderNeuralODE, FreeSecondOrderNeuralODE
 from .integratedodes import SolvedSecondOrderNeuralODE
 from .helmholtzmetrics import HelmholtzMetric, TryLearnDouglas
-from .lanedemodels import LagrangianNeuralODEModel, SimultaneousLearnedDouglasOnlyX
+from .lanedemodels import LagrangianNeuralODEModel, SimultaneousLearnedDouglasOnlyX, DouglasOnFixedODE
 from .lanede import LagrangianNeuralODE, make_dataloader
 from .training import train_lagrangian_neural_ode, TrainingInfo
 from .temporal_schedulers import TemporalScheduler, SigmoidTemporalScheduler
-from .normalize import Normalizer, MeanStd
+from .normalize import Normalizer, MeanStd, Identity
 
 __all__ = [
     "NeuralNetwork",
@@ -80,10 +82,12 @@ __all__ = [
     "TryLearnDouglas",
     "LagrangianNeuralODEModel",
     "SimultaneousLearnedDouglasOnlyX",
+    "DouglasOnFixedODE",
     "LagrangianNeuralODE",
     "train_lagrangian_neural_ode",
     "TemporalScheduler",
     "SigmoidTemporalScheduler",
     "Normalizer",
     "MeanStd",
+    "Identity",
 ]

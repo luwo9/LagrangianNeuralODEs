@@ -991,3 +991,84 @@ class MeanStd(Normalizer):
             self._stds[name] = None if std is None else np.array(std)
 
         super().load_state_dict(state_dict)
+
+
+class Identity(Normalizer):
+    """
+    A normalizer that does not transform the data.
+    """
+
+    def _fit(self, t: np.ndarray, x: np.ndarray | None, xdot: np.ndarray | None) -> Identity:
+        # Nothing to do here.
+        return self
+
+    def _transform_time(self, t: np.ndarray) -> np.ndarray:
+        return t
+
+    def _inverse_transform_time(self, t_transformed: np.ndarray) -> np.ndarray:
+        return t_transformed
+
+    def _derivative_inverse_transform_time(self, t_transformed: np.ndarray) -> np.ndarray:
+        return np.ones_like(t_transformed)
+
+    def _double_derivative_inverse_transform_time(self, t_transformed: np.ndarray) -> np.ndarray:
+        return np.zeros_like(t_transformed)
+
+    def _transform_both(
+        self, t: np.ndarray, x: np.ndarray, xdot: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        return x, xdot
+
+    def _inverse_transform_both(
+        self, t: np.ndarray, x_transformed: np.ndarray, xdot_transformed: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        return x_transformed, xdot_transformed
+
+    def _get_eye_with_batches(self, batch_shape: tuple[int, ...], n_dim: int) -> np.ndarray:
+        # Get an identity matrix with additional batch dimensions.
+        eye = np.zeros(batch_shape + (n_dim, n_dim))
+        diag_indices = np.diag_indices(n_dim)
+        eye[..., diag_indices[0], diag_indices[1]] = 1
+        return eye
+
+    def _jacobian_inverse_transform_both(
+        self, t: np.ndarray, x_transformed: np.ndarray, xdot_transformed: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        n_batch, n_steps, n_dim = x_transformed.shape
+        # t, x, xdot transform independently.
+        time_derivative = np.zeros((n_batch, n_steps, n_dim))
+        state_derivative = np.zeros((n_batch, n_steps, n_dim, n_dim))
+        derivative_derivative = self._get_eye_with_batches((n_batch, n_steps), n_dim)
+        return time_derivative, state_derivative, derivative_derivative
+
+    def _transform_state(self, t: np.ndarray, x: np.ndarray) -> np.ndarray:
+        return x
+
+    def _inverse_transform_state(self, t: np.ndarray, x_transformed: np.ndarray) -> np.ndarray:
+        return x_transformed
+
+    def _jacobian_inverse_transform_state(
+        self, t: np.ndarray, x_transformed: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        n_batch, n_steps, n_dim = x_transformed.shape
+        # t, x transform independently.
+        time_derivative = np.zeros((n_batch, n_steps, n_dim))
+        state_derivative = self._get_eye_with_batches((n_batch, n_steps), n_dim)
+        return time_derivative, state_derivative
+
+    def _double_jacobian_inverse_transform_state(
+        self, t: np.ndarray, x_transformed: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        n_batch, n_steps, n_dim = x_transformed.shape
+        # All transformations are linear, so all second derivatives are
+        # zero.
+        time_time_derivative = np.zeros((n_batch, n_steps, n_dim))
+        time_state_derivative = np.zeros((n_batch, n_steps, n_dim, n_dim))
+        state_time_derivative = np.zeros((n_batch, n_steps, n_dim, n_dim))
+        state_state_derivative = np.zeros((n_batch, n_steps, n_dim, n_dim, n_dim))
+        return (
+            time_time_derivative,
+            time_state_derivative,
+            state_time_derivative,
+            state_state_derivative,
+        )

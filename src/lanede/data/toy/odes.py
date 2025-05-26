@@ -81,6 +81,8 @@ def from_ode(
     y_0 = np.concatenate([x_0, xdot_0], axis=1).flatten()
 
     sol = solve_ivp(scipy_ode_func, (t[0], t[-1]), y_0, t_eval=t, **kwargs_with_defaults)
+    if not sol.success:
+        raise RuntimeError(f"ODE integration failed: {sol.message}")
     y = sol.y.reshape((n_batch, 2 * n_dim, len(t)))
     y = y.transpose((0, 2, 1))
 
@@ -159,3 +161,37 @@ class DampedHarmonicOscillator(ODE):
     def _matmul(matrix, vector):
         # (double) Batched vector times non-batched matrix
         return np.einsum("ij,abj->abi", matrix, vector)
+
+
+class NonExtremalCaseIIIb(ODE):
+    r"""
+    An example of an ODE that does not originate from a Lagrangian.
+
+    The ODE is given by:
+
+    $$
+    \begin{pmatrix}
+        \ddot{x}_1 \\
+        \ddot{x}_2
+        \end{pmatrix}
+    =
+    \begin{pmatrix}
+        x_1^2 + x_2^2 \\
+        0
+    \end{pmatrix}
+    $$
+
+    This example was given by Douglas himself for the case IIIb in the paper [1]_.
+
+    References
+    ----------
+
+    .. [1] Douglas J. (1941). Solution of the Inverse Problem of the Calculus of Variations. Transactions of the American Mathematical Society, 50(1), 71-128.
+    https://doi.org/10.1090/S0002-9947-1941-0004740-5.
+    """
+
+    def __call__(self, t: np.ndarray, x: np.ndarray, xdot: np.ndarray) -> np.ndarray:
+        f_1 = np.einsum("abi,abi->ab", x, x)
+        f_2 = np.zeros_like(f_1)
+        result = np.stack([f_1, f_2], axis=-1)
+        return result

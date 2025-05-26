@@ -141,7 +141,12 @@ class LagrangianNeuralODE:
         state dictionary.
     """
 
-    def __init__(self, model: LagrangianNeuralODEModel, normalizer: Normalizer) -> None:
+    def __init__(
+        self,
+        model: LagrangianNeuralODEModel,
+        normalizer: Normalizer,
+        normalizer_prefitted: bool = False,
+    ) -> None:
         """
         Initializes the model.
 
@@ -152,10 +157,12 @@ class LagrangianNeuralODE:
             The underlying Lagrangian Neural ODE model to use.
         normalizer : Normalizer
             A normalizer for the data.
+        normalizer_prefitted : bool, default=False
+            Whether the normalizer was already fitted.
         """
         self._model = model
         self._normalizer = normalizer
-        self._normalizer_was_fitted = False
+        self._normalizer_was_fitted = normalizer_prefitted
 
     def train(
         self,

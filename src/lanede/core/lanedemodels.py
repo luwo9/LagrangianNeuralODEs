@@ -598,3 +598,216 @@ class SimultaneousLearnedDouglasOnlyX(LagrangianNeuralODEModel):
         x = x[:, :n_train, :] if x is not None else None
         xdot = xdot[:, :n_train, :] if xdot is not None else None
         return t, x, xdot
+
+
+class DouglasOnFixedODE(LagrangianNeuralODEModel):
+    """
+    This is in some sense a dummy model. It does not learn an ODE, but
+    trains only the Helmholtz metric, i.e. the matrix g in Douglas'
+    Helmholtz conditions on a fixed second order ODE.
+
+    Both state and its derivative are expected to be supplied.
+    """
+
+    def __init__(
+        self,
+        neural_ode: SolvedSecondOrderNeuralODE,
+        helmholtz_metric: TryLearnDouglas,
+        optimizer: Optimizer,
+        lr_scheduler: LRScheduler | None = None,
+    ) -> None:
+        """
+        Initializes the model.
+
+        Parameters
+        ----------
+
+        neural_ode : SolvedSecondOrderNeuralODE
+            The integrated second order neural ODE to represent the
+            dynamics. See notes. Gradients are not computed and it is
+            not updated.
+        helmholtz_metric : TryLearnDouglas
+            The metric to use for the Helmholtz conditions.
+        optimizer : Optimizer
+            The optimizer to be used for updating the Helmholtz metric.
+            Must be initialized with the parameters of the metric.
+        lr_scheduler : LRScheduler, optional
+            A scheduler to use for the learning rate. Must be initialized
+            with the optimizer. It is called each update step with the
+            value of the Helmholtz metric as the loss metric. Thus, its
+            `.step()` method should expect such a value.
+
+        Notes
+        -----
+
+        Since the second order method of the neural ODE is used when
+        computing the Helmholtz metric, its requirements must be met.
+        See `TryLearnDouglas` documentation for more information.
+
+        All models are moved to be on the device of the helmholtz metric.
+        """
+        super().__init__()
+        self._neural_ode = neural_ode
+        self._helmholtz_metric = helmholtz_metric
+        self._optimizer = optimizer
+        self._lr_scheduler = lr_scheduler
+
+        # Enforce single device for all components
+        device = self._helmholtz_metric.device
+        self._neural_ode.to(device)
+
+    def update(
+        self,
+        t: torch.Tensor,
+        x: torch.Tensor | None = None,
+        xdot: torch.Tensor | None = None,
+        individual_metrics: bool = False,
+    ) -> (
+        tuple[torch.Tensor, torch.Tensor]
+        | tuple[torch.Tensor, torch.Tensor, dict[str, torch.Tensor]]
+    ):
+        """
+        Update the model based on data. **IMPORTANT**: The neural ODE
+        is **NOT** integrated and the Helmholtz metric is evaluated
+        on the trajectories given as input (see notes). The
+        prediction error is returned as zero.
+
+        Parameters
+        ----------
+
+        t : torch.Tensor, shape (n_steps,)
+            The time points.
+        x : torch.Tensor, shape (n_batch, n_steps, n_dim), optional
+            The (data) states at time steps t.
+        xdot : torch.Tensor, shape (n_batch, n_steps, n_dim), optional
+            The (data) derivative of the state at time steps t.
+        individual_metrics : bool, default=False
+            Whether to additionally return individual metrics for the
+            Helmholtz conditions or just the combined metric.
+
+        Returns
+        -------
+
+        torch.Tensor, shape scalar
+            The combined metric of the Helmholtz conditions.
+        torch.Tensor, shape scalar
+            The prediction error/loss. Always zero.
+        dict[str, torch.Tensor], optional
+            Individual metrics for the Helmholtz conditions. Returned
+            only if `individual_metrics` is True.
+
+        Notes
+        -----
+
+        Derivative and state must both be supplied.
+
+        Return values are detached from the computation graph.
+
+        Not integrating the ODE allows for a huge speedup. If using,
+        e.g., `SimultaneousLearnedDouglasOnlyX`, the metric is
+        evaluated on the predicted/integrated trajectory. This model
+        can still reproduce this behavior: Since the neural ODE is not
+        updated, the trajectories may be predicted once and then used
+        as data input to this method. In this case the prediction error
+        is exactly zero, matching what is returned here.
+        """
+        n_batch = x.shape[0]
+        t = t.repeat(n_batch, 1)
+
+        helmholtz_metrics = self._helmholtzmetric(
+            t, x, xdot, individual_metrics=individual_metrics
+        )
+        if individual_metrics:
+            helmholtz_loss, individual_helmholtz_metrics = helmholtz_metrics
+        else:
+            helmholtz_loss = helmholtz_metrics
+
+        self._optimizer.zero_grad()
+        helmholtz_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self._helmholtz_metric.parameters(), 10)
+        # Just to be sure that no update is done to the neural ODE and
+        # gradients are cleaned up:
+        self._neural_ode.zero_grad()
+        self._optimizer.step()
+
+        helmholtz_loss = helmholtz_loss.detach()
+
+        if self._lr_scheduler is not None:
+            self._lr_scheduler.step(helmholtz_loss)
+
+        regression_loss = torch.zeros_like(helmholtz_loss)
+
+        if not individual_metrics:
+            return helmholtz_loss, regression_loss
+
+        individual_helmholtz_metrics = {
+            k: v.detach() for k, v in individual_helmholtz_metrics.items()
+        }
+        return helmholtz_loss, regression_loss, individual_helmholtz_metrics
+
+    def second_order_function(
+        self, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Computes the second order derivative as given by the neural ode.
+        More precisely, for the underlying ODE
+        $\ddot{x} = f^\\ast(t, x, \dot{x})$, this function is the
+        $f^\\ast.
+
+        Parameters
+        ----------
+
+        t : torch.Tensor, shape (n_batch, n_steps)
+            The time at which the state is evaluated.
+        x : torch.Tensor, shape (n_batch, n_steps, n_dim)
+            The state at time t.
+        xdot : torch.Tensor, shape (n_batch, n_steps, n_dim)
+            The derivative of the state at time t.
+
+        Returns
+        -------
+
+        torch.Tensor, shape (n_batch, n_steps, n_dim)
+            The second order derivative of the state.
+        """
+        with torch.inference_mode():
+            result = self._neural_ode.second_order_function(t, x, xdot)
+        return result
+
+    @property
+    def device(self) -> torch.device:
+        """
+        The device on which the model is stored.
+        """
+        return self._helmholtz_metric.device
+
+    def _predict(
+        self, t: torch.Tensor, x_0: torch.Tensor | None = None, xdot_0: torch.Tensor | None = None
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        # See predict
+        # Here it is integrated, as required by the interface.
+        return self._neural_ode(t, x_0, xdot_0)
+
+    def _error(
+        self,
+        t: torch.Tensor,
+        x_pred: torch.Tensor | None = None,
+        xdot_pred: torch.Tensor | None = None,
+        x_true: torch.Tensor | None = None,
+        xdot_true: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        # See error
+        # Return 0 as the prediction error as defined in `update`.
+        return torch.zeros_like(x_pred[0, 0, 0])
+
+    def _helmholtzmetric(
+        self,
+        t: torch.Tensor,
+        x: torch.Tensor,
+        xdot: torch.Tensor,
+        scalar: bool = True,
+        individual_metrics: bool = False,
+    ) -> torch.Tensor | tuple[torch.Tensor, dict[str, torch.Tensor]]:
+        # See helmholtzmetric
+        f = self._neural_ode.second_order_function
+        return self._helmholtz_metric.forward(f, t, x, xdot, scalar, individual_metrics)
