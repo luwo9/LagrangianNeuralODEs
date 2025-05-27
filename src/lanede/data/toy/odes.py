@@ -195,3 +195,37 @@ class NonExtremalCaseIIIb(ODE):
         f_2 = np.zeros_like(f_1)
         result = np.stack([f_1, f_2], axis=-1)
         return result
+
+
+class NonExtremalCaseIV(ODE):
+    r"""
+    An example of an ODE that does not originate from a Lagrangian.
+
+    The ODE is given by:
+
+    $$
+    \begin{pmatrix}
+        \ddot{x}_1 \\
+        \ddot{x}_2
+        \end{pmatrix}
+    =
+    \begin{pmatrix}
+        x_1^2 + x_2^2 \\
+        x_1
+    \end{pmatrix}
+    $$
+
+    This example was given by Douglas himself for the case IV in the paper [1]_.
+
+    References
+    ----------
+
+    .. [1] Douglas J. (1941). Solution of the Inverse Problem of the Calculus of Variations. Transactions of the American Mathematical Society, 50(1), 71-128.
+    https://doi.org/10.1090/S0002-9947-1941-0004740-5.
+    """
+
+    def __call__(self, t: np.ndarray, x: np.ndarray, xdot: np.ndarray) -> np.ndarray:
+        f_1 = np.einsum("abi,abi->ab", x, x)
+        f_2 = x[:, :, 0]
+        result = np.stack([f_1, f_2], axis=-1)
+        return result

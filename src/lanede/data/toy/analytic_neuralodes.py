@@ -73,3 +73,26 @@ class CaseIIIbODE(SecondOrderNeuralODE):
     @property
     def device(self):
         return self._track_device.device
+
+
+class CaseIVODE(SecondOrderNeuralODE):
+    """
+    Like `NonExtremalCaseIV`, but in pytorch.
+    """
+
+    def __init__(self):
+        super().__init__()
+        # See `CaseIIIbODE` for explanation
+        self.register_buffer("_track_device", torch.tensor(0.0))
+
+    def second_order_function(
+        self, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor
+    ) -> torch.Tensor:
+        f_1 = torch.einsum("abi,abi->ab", x, x)
+        f_2 = x[:, :, 0]
+        result = torch.stack([f_1, f_2], axis=-1)
+        return result
+
+    @property
+    def device(self):
+        return self._track_device.device
