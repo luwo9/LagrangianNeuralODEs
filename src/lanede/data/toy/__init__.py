@@ -27,14 +27,16 @@ ODEs
 ODE (abstract)
 DampedHarmonicOscillator
 NonExtremalCaseIIIb
+NonExtremalCaseIV
 
 Analytic Neural ODEs
 --------------------
 
 HarmonicOscillatorODE
 CaseIIIbODE
+CaseIVODE
 """
 
-from .odes import from_ode, ODE, DampedHarmonicOscillator, NonExtremalCaseIIIb
+from .odes import from_ode, ODE, DampedHarmonicOscillator, NonExtremalCaseIIIb, NonExtremalCaseIV
 from .modify import add_noise
-from .analytic_neuralodes import HarmonicOscillatorODE, CaseIIIbODE
+from .analytic_neuralodes import HarmonicOscillatorODE, CaseIIIbODE, CaseIVODE
