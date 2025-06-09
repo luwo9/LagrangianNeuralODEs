@@ -593,7 +593,10 @@ class SimultaneousLearnedDouglasOnlyX(LagrangianNeuralODEModel):
         # temporal scheduler
         ratio_train = self._temporal_scheduler.get_ratio(self._n_train_steps)
         n_train = int(ratio_train * t.shape[0])
-        n_train = max(n_train, 1)
+        # Use at lest two time steps, otherwise if
+        # - n_train is 0, the data is empty
+        # - n_train is 1, the ode is not integrated/used
+        n_train = max(n_train, 2)
         t = t[:n_train]
         x = x[:, :n_train, :] if x is not None else None
         xdot = xdot[:, :n_train, :] if xdot is not None else None
