@@ -34,6 +34,7 @@ damping_matrix = np.array([[0.0, 0],
 name = "simple_douglas"
 cfg = {
     "dim": 2,
+    "explicit_time_dependence_lagrangian": True,
     "learning": {
         "optimizer": "RAdam",
         "lr": 0.07,
