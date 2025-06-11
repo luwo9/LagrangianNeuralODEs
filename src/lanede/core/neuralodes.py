@@ -112,7 +112,7 @@ class FreeSecondOrderNeuralODE(SecondOrderNeuralODE):
         Computes the second order deriative $f^\\ast(t, x, \dot{x})$ using a neural network.
     """
 
-    def __init__(self, neural_network: nn.Module) -> None:
+    def __init__(self, neural_network: nn.Module, supress_time_dependence: bool = False) -> None:
         """
         Initializes the model.
 
@@ -121,9 +121,16 @@ class FreeSecondOrderNeuralODE(SecondOrderNeuralODE):
 
         neural_network : nn.Module
             The neural network that computes the function $f^\\ast(t, x, \dot{x})$. Must map 2n_dim+1 to n_dim.
+        supress_time_dependence : bool, default=False
+            If True, the time dependence is supressed, i.e.
+            $f^\\ast(x, \dot{x})$ is computed instead of
+            $f^\\ast(t, x, \dot{x})$. This is done by setting t=0 in
+            the neural network input.
         """
         super().__init__()
         self._neural_network = neural_network
+        # Get as a factor to multiply the time input with
+        self._time_factor = float(not supress_time_dependence)
 
     @property
     def device(self) -> torch.device:
@@ -155,6 +162,8 @@ class FreeSecondOrderNeuralODE(SecondOrderNeuralODE):
             The second order derivative of the state.
         """
         t = t.unsqueeze(2)
+        # Suppress time dependence if configured
+        t = t * self._time_factor
         input = torch.cat([t, x, xdot], dim=2)
 
         xdotdot = self._neural_network(input)

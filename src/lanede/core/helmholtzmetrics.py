@@ -126,6 +126,7 @@ class TryLearnDouglas(HelmholtzMetric):
         neural_network: nn.Module,
         h_2_weight: float = 1.0,
         h_3_weight: float = 1.0,
+        supress_time_dependence: bool = False,
         metric_clip_func: Callable = None,
     ) -> None:
         """
@@ -142,6 +143,10 @@ class TryLearnDouglas(HelmholtzMetric):
             The relative weight for the second Helmholtz condition in the loss (see notes).
         h_3_weight : float, default=1.0
             The relative weight for the third Helmholtz condition in the loss (see notes).
+        supress_time_dependence : bool, default=False
+            If True, the time dependence is supressed, i.e. g does not
+            explicitly depend on t. This is done by setting t=0 in the
+            neural network input.
         metric_clip_func : Callable, optional
             A function to clip each metric with. None (default) means 10*tanh(x/10).
             Useful to prevent exploding values.
@@ -162,6 +167,7 @@ class TryLearnDouglas(HelmholtzMetric):
         self._neural_network = neural_network
         self._h_2_weight = h_2_weight
         self._h_3_weight = h_3_weight
+        self._time_factor = float(not supress_time_dependence)
         self._clip_func = metric_clip_func
         if self._clip_func is None:
             self._clip_func = lambda x: 10 * torch.tanh(x / 10)
@@ -513,6 +519,8 @@ class TryLearnDouglas(HelmholtzMetric):
         # function, that may result from the Helmholtz conditions
         # (see e.g. H2 with df/dv = const.).
         t = t.unsqueeze(2)
+        # Suppress time dependence if configured.
+        t = t * self._time_factor
         result = self._neural_network(torch.cat([t, x, v], dim=2))
         result = torch.sinh(result)
         return result

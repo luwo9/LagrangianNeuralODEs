@@ -58,6 +58,7 @@ _normalizer_map = {
 
 example_simple_douglas_only_x: JSONDict = {
     "dim": 3,
+    "explicit_time_dependence_lagrangian": True,
     "learning": {
         "optimizer": "RAdam",
         "lr": 0.05,
@@ -94,6 +95,7 @@ def simple_douglas_only_x(config: JSONDict) -> LagrangianNeuralODE:
     Create a `LagrangianNeuralODE` with a `SimultaneousLearnedDouglasOnlyX`
     model from a simple configuration dictionary.
     """
+    supress_time_dependence = not config["explicit_time_dependence_lagrangian"]
     dim = config["dim"]
     symmetric_dim = dim * (dim + 1) // 2
     full_dim = 2 * dim + 1
@@ -105,7 +107,7 @@ def simple_douglas_only_x(config: JSONDict) -> LagrangianNeuralODE:
     hidden_layer_sizes = ode_config["hidden_layer_sizes"]
     activation_fn = _activation_fn_map[ode_config["activation_fn"]]
     ode_net = NeuralNetwork(full_dim, hidden_layer_sizes, dim, activation_fn)
-    ode = FreeSecondOrderNeuralODE(ode_net)
+    ode = FreeSecondOrderNeuralODE(ode_net, supress_time_dependence=supress_time_dependence)
 
     rtol = ode_config["rtol"]
     atol = ode_config["atol"]
@@ -118,7 +120,7 @@ def simple_douglas_only_x(config: JSONDict) -> LagrangianNeuralODE:
     activation_fn = _activation_fn_map[helmholtz_config["activation_fn"]]
     metric_net = NeuralNetwork(full_dim, hidden_layer_sizes, symmetric_dim, activation_fn)
     weights = helmholtz_config["condition_weights"]
-    metric = TryLearnDouglas(metric_net, *weights)
+    metric = TryLearnDouglas(metric_net, *weights, supress_time_dependence=supress_time_dependence)
 
     # Assemble model
     # Assemble initial condition network
