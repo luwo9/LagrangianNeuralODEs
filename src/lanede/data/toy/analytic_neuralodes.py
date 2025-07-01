@@ -5,6 +5,7 @@ wants to measure the Helmholtz metric of a known ODE.
 """
 
 import torch
+import numpy as np
 
 from lanede.core import SecondOrderNeuralODE
 
@@ -96,3 +97,40 @@ class CaseIVODE(SecondOrderNeuralODE):
     @property
     def device(self):
         return self._track_device.device
+
+
+class KeplerODE(SecondOrderNeuralODE):
+    """
+    Like `KeplerProblem`, but in pytorch.
+    """
+
+    def __init__(self, semi_major_axis: float, orbital_period: float = 1.0):
+        """
+        Initialize the Kepler ODE. Both values are only used to compute
+        the gravitational constant GM of the ODE.
+
+        Parameters
+        ----------
+        semi_major_axis : float
+            The semi-major axis of the orbit.
+        orbital_period : float
+            The orbital period of the orbit.
+        """
+        super().__init__()
+        GM = 4 * np.pi**2 * semi_major_axis**3 / orbital_period**2
+        self.register_buffer("_GM", torch.tensor(GM, dtype=torch.float32))
+
+    def second_order_function(
+        self, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor
+    ) -> torch.Tensor:
+        r = x[:, :, 0]
+        rdot = xdot[:, :, 0]
+        phidot = xdot[:, :, 1]
+
+        rdotdot = r * phidot**2 - self._GM / r**2
+        phiddot = -2 * rdot * phidot / r
+        return torch.stack([rdotdot, phiddot], axis=-1)
+
+    @property
+    def device(self):
+        return self._GM.device

@@ -28,6 +28,7 @@ ODE (abstract)
 DampedHarmonicOscillator
 NonExtremalCaseIIIb
 NonExtremalCaseIV
+KeplerProblem
 
 Analytic Neural ODEs
 --------------------
@@ -35,8 +36,16 @@ Analytic Neural ODEs
 HarmonicOscillatorODE
 CaseIIIbODE
 CaseIVODE
+KeplerODE
 """
 
-from .odes import from_ode, ODE, DampedHarmonicOscillator, NonExtremalCaseIIIb, NonExtremalCaseIV
+from .odes import (
+    from_ode,
+    ODE,
+    DampedHarmonicOscillator,
+    NonExtremalCaseIIIb,
+    NonExtremalCaseIV,
+    KeplerProblem,
+)
 from .modify import add_noise
-from .analytic_neuralodes import HarmonicOscillatorODE, CaseIIIbODE, CaseIVODE
+from .analytic_neuralodes import HarmonicOscillatorODE, CaseIIIbODE, CaseIVODE, KeplerODE

@@ -229,3 +229,132 @@ class NonExtremalCaseIV(ODE):
         f_2 = x[:, :, 0]
         result = np.stack([f_1, f_2], axis=-1)
         return result
+
+
+class KeplerProblem(ODE):
+    r"""
+    The Kepler problem, which describes the motion of two bodies
+    (masses $m_1$ and $m_2$) under the influence of their mutual
+    gravitational attraction.
+
+    Here it is formulated in relative, polar coordinates
+    $(r, \varphi)$.
+
+    Defining $M = m_1 + m_2$ and $\mu = m_1 m_2 / M$, the Lagrangian is given by:
+    $$
+    L(r, \dot{r}, \varphi, \dot{\varphi}) = \frac{1}{2} \mu (\dot{r}^2 + r^2 \dot{\varphi}^2) + \frac{G m_1 m_2}{r}
+    $$
+
+    Thus the equations of motion are given by:
+    $$
+    \begin{pmatrix}
+        \ddot{r} \\
+        \ddot{\varphi}
+    \end{pmatrix}
+    =
+    \begin{pmatrix}
+        r\dot{\varphi}^2 - \frac{G M}{r^2} \\
+        -\frac{2 \dot{r} \dot{\varphi}}{r}
+    \end{pmatrix}
+
+    Additional Methods
+    ------------------
+
+    get_initial_conditions(semi_latus_rectum, eccentricity, phi_0)
+        Get initial conditions that yield an orbit with the
+        specified characteristics.
+    """
+
+    def __init__(self, semi_major_axis: float, orbital_period: float = 1.0):
+        r"""
+        Set up the Kepler problem.
+
+        The gravitational parameter $GM$ is computed to fit the
+        supplied characteristics of the orbit, using Kepler's third
+        law:
+        $$ T^2 = \frac{4 \pi^2 a^3}{GM} $$
+
+        Parameters
+        ----------
+
+        semi_major_axis : float
+            The semi-major axis of an orbit that takes `orbital_period`
+            time to complete.
+        orbital_period : float, default=1.0
+            The time it takes to complete an orbit with the given
+            semi-major axis.
+
+        Notes
+        -----
+
+        This does not mean all orbits have the specified
+        semi-major axis or orbital period. They are solely used to
+        choose the gravitational parameter $GM$ such that an orbit
+        with the given semi-major axis has the specified orbital
+        period.
+
+        Depending on the initial conditions, the actual orbit may
+        differ in both semi-major axis and orbital period.
+        """
+        self._GM = 4 * np.pi**2 * semi_major_axis**3 / orbital_period**2
+
+    def __call__(self, t: np.ndarray, x: np.ndarray, xdot: np.ndarray) -> np.ndarray:
+        r = x[:, :, 0]
+        rdot = xdot[:, :, 0]
+        phidot = xdot[:, :, 1]
+
+        rdotdot = r * phidot**2 - self._GM / r**2
+        phiddot = -2 * rdot * phidot / r
+        return np.stack([rdotdot, phiddot], axis=-1)
+
+    def get_initial_conditions(
+        self, semi_latus_rectum: np.ndarray, eccentricity: np.ndarray, phi_0: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        r"""
+        Get initial conditions for the Kepler problem from orbit
+        characteristics.
+
+        Parameters
+        ----------
+
+        semi_latus_rectum : np.ndarray, shape (n_batch,)
+            The semi-latus rectum of the orbit, see notes below.
+        eccentricity : np.ndarray, shape (n_batch,)
+            The (numerical) eccentricity of the orbit.
+        phi_0 : np.ndarray, shape (n_batch,)
+            The initial angle in radians.
+
+        Returns
+        -------
+
+        np.array, shape (n_batch, 2)
+            The initial state in polar coordinates $(r_0, \varphi_0)$.
+        np.array, shape (n_batch, 2)
+            The initial velocities in polar coordinates
+            $(\dot{r}_0, \dot{\varphi}_0)$.
+
+        Notes
+        -----
+
+        The semi-latus rectum is half the width of the conic section,
+        perpendicular to the major axis and related to the semi-major
+        axis $a$ and eccentricity $e$ by $p = a(1 - e^2)$.
+
+        For eccentricies $1 \leq e \lessim 20$ angles
+        $-1.6 \lesssim e \lesssim 1.6$ should provide a nice
+        description of the orbit.
+        """
+        # (Specific) angular momentum (from solution of Kepler problem)
+        angular_momentum = np.sqrt(self._GM * semi_latus_rectum)
+
+        # Define r as smallest distance at phi = 0
+        # In this way for parabulas r is finite around phi = 0
+        r_0 = semi_latus_rectum / (1 + eccentricity * np.cos(phi_0))
+        # From d/dt r = dr/dphi h/r^2 (h_0 = h = angular momentum):
+        rdot_0 = self._GM / angular_momentum * eccentricity * np.sin(phi_0)
+        phidot_0 = angular_momentum / r_0**2
+
+        x_0 = np.stack([r_0, phi_0], axis=-1)
+        xdot_0 = np.stack([rdot_0, phidot_0], axis=-1)
+
+        return x_0, xdot_0
