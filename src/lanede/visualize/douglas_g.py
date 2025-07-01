@@ -9,6 +9,9 @@ import numpy as np
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.ticker import ScalarFormatter
+from matplotlib.lines import Line2D
+import matplotlib.pyplot as plt
+import cycler
 
 from ._pyplot import subplots_with_custom_row_spacing
 
@@ -23,19 +26,21 @@ def _plot_matrix_function_stacked(
     components: np.ndarray,
     matrix_name: str,
     component_name: str,
-    **kwargs,
+    stack_plot_kwargs: cycler.Cycler | None = None,
 ) -> None:
     # Plots a n x n matrix function on n x n axes, plotting multiple
     # versions of the function on the same axes.
     # axs shape: (n_dim, n_dim)
     # matirces shape: (n_batch, n_steps, n_dim, n_dim)
     # components shape: (n_batch, n_steps)
+    # stack_plot_kwargs is a cycler that is used when plotting the
+    # stacked matrix elements
     n_dim = axs.shape[0]
     matrices = matrices.transpose(2, 3, 0, 1)
     matrices = matrices.reshape(-1, *matrices.shape[2:])
     axs = axs.flatten()
 
-    for (i, j), matrix_elements, ax in zip(np.ndindex(n_dim, n_dim), matrices, axs):
+    for (i, j), matrix_element_stack, ax in zip(np.ndindex(n_dim, n_dim), matrices, axs):
         ax.set_ylabel(rf"{matrix_name}$_{{{i+1}{j+1}}}$")
         ax.yaxis.set_major_formatter(_formatter_g)
         ax.tick_params(axis="x", which="both", labelsize="small")
@@ -48,7 +53,9 @@ def _plot_matrix_function_stacked(
         if i + j > 0:
             ax.sharex(axs[0])
 
-        for matrix_element, component in zip(matrix_elements, components):
+        for matrix_element, component, kwargs in zip(
+            matrix_element_stack, components, stack_plot_kwargs
+        ):
             ax.plot(component, matrix_element, **kwargs)
 
 
@@ -57,7 +64,9 @@ def plot_g_matrix(
     t: np.ndarray,
     x: np.ndarray,
     xdot: np.ndarray,
+    g_analytic: np.ndarray | None = None,
     n_random: int = 10,
+    residuals: bool = False,
     t_component: bool = True,
     state_components: tuple[int] | None = None,
     derivative_components: tuple[int] | None = None,
@@ -78,8 +87,16 @@ def plot_g_matrix(
         The state at the time steps.
     xdot : np.ndarray, shape (n_batch, n_steps, n_dim)
         The derivative of the state at the time steps.
-    n_random : int, optional
+    g_analytic : np.ndarray, shape (n_batch, n_steps, n_dim, n_dim), optional
+        The analytic g matrix to plot at each time step. If None,
+        no analytic g matrix is plotted.
+    n_random : int, default=10
         The number of randomly selected time series to plot g for.
+    residuals : bool, default=False
+        Whether to plot the residuals of the g matrix, i.e., the
+        difference between the g matrix and the analytic g matrix,
+        relative to the analytic g matrix. The analytic g matrix
+        must be provided for this.
     t_component : bool, default=True
         Whether to plot the time dependence of g.
     state_components : tuple[int], optional
@@ -108,8 +125,9 @@ def plot_g_matrix(
     rng = np.random.default_rng()
     n_batch, _, n_dim, _ = g_matrix.shape
 
-    state_components = state_components or tuple(range(n_dim))
-    derivative_components = derivative_components or tuple(range(n_dim))
+    # Get the components to plot and their names
+    state_components = tuple(range(n_dim)) if state_components is None else state_components
+    derivative_components = tuple(range(n_dim)) if derivative_components is None else derivative_components
     state_components = np.array(state_components, dtype=int)
     derivative_components = np.array(derivative_components, dtype=int)
     state_names = state_names or [rf"$x_{i}$" for i in state_components]
@@ -133,14 +151,56 @@ def plot_g_matrix(
         figsize=figsize,
     )
 
-    common_plot_kwargs = {"alpha": 0.5}
+    # In the below, the analytic g matrix is stacked in the batch
+    # dimension, so that only a single call to the plotting function
+    # is needed. The plot properties can simply be adjusted by
+    # constructing an appropriate cycler object.
+
+    # If residuals are requested, plot them instead
+
+    # Setup plot kwargs
+    # TODO: allow e.g. sampling from colormap
+    common = cycler.cycler(alpha=[0.5]) # length 1
+    colors = plt.rcParams["axes.prop_cycle"]
+    common_plot_kwargs = colors * common
+    
+    if g_analytic is not None and not residuals:
+        # Make analytic trajectories dashed
+        linestyle = cycler.cycler(linestyle=["-", "--"])
+        common_plot_kwargs = linestyle * common_plot_kwargs # cycle color first
+
+        # Label analytic and learned g matrix
+        legend_elements = [
+            Line2D([0], [0], color="black", linestyle="-", label="Learned $g$"),
+            Line2D([0], [0], color="black", linestyle="--", label="Analytic $g$"),
+        ]
+        fig.legend(handles=legend_elements, loc="upper right")
 
     # Select subset of data to plot
     rng_indices = rng.choice(n_batch, n_random, replace=False)
     g_matrix = g_matrix[rng_indices]
     t = t[rng_indices]
-    x = x[rng_indices][:, :, state_components].transpose(2, 0, 1)
-    xdot = xdot[rng_indices][:, :, derivative_components].transpose(2, 0, 1)
+    x = x[rng_indices][:, :, state_components]
+    xdot = xdot[rng_indices][:, :, derivative_components]
+
+    if g_analytic is not None:
+        g_analytic = g_analytic[rng_indices]
+
+        if residuals:
+            # Use residuals instead of the actual g matrix.
+            g_matrix = (g_matrix - g_analytic) / np.abs(g_analytic)
+        else:
+            # Stack the analytic g matrix in the batch dimension, see above
+            g_matrix = np.concatenate((g_matrix, g_analytic), axis=0)
+            t = np.concatenate((t, t), axis=0)
+            x = np.concatenate((x, x), axis=0)
+            xdot = np.concatenate((xdot, xdot), axis=0)
+            
+
+    # Permute to (n_dim, n_batch, n_steps) to loop over the components
+    # first, as the plotting function is called for each component
+    x = x.transpose(2, 0, 1)
+    xdot = xdot.transpose(2, 0, 1)
 
     axs_by_component = np.split(axs, n_rows // n_dim)
     if t_component:
@@ -150,7 +210,7 @@ def plot_g_matrix(
             t,
             "$g$",
             "$t$",
-            **common_plot_kwargs,
+            common_plot_kwargs,
         )
 
     for components_name, components, axs_ in zip(state_names, x, axs_by_component[t_component:]):
@@ -160,7 +220,7 @@ def plot_g_matrix(
             components,
             "$g$",
             components_name,
-            **common_plot_kwargs,
+            common_plot_kwargs,
         )
 
     start = t_component + len(state_components)
@@ -171,7 +231,7 @@ def plot_g_matrix(
             components,
             "$g$",
             components_name,
-            **common_plot_kwargs,
+            common_plot_kwargs,
         )
 
     return fig, axs
