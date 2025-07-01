@@ -250,7 +250,7 @@ class LagrangianNeuralODE:
         t_with_batches, x, xdot = self._normalizer.transform(t_with_batches, x, xdot)
         # Bring back to (n_steps,)
         t = t_with_batches[0]
-        train_data = make_dataloader(t, x, xdot, batch_size=batch_size)
+        train_data = make_dataloader(t, x, xdot, batch_size=batch_size, shuffle=True)
 
         # Process validation data accordingly, if present
         validation_keys = ["t_validation", "x_validation", "xdot_validation"]
