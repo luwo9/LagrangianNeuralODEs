@@ -28,6 +28,8 @@ N_EPOCHS = 1000
 N_SAMPLES_TRAIN = 6000
 N_SAMPLES_TEST = 12000
 LR_SCHEDULER_OPTIONS = {"factor": 0.5, "patience": 1500, "threshold": 1e-2}
+# Whether to compute the analytic g matrix and compare
+COMPUTE_ANALYTIC_G = True
 # If saving files below, this is used as an identifier
 SAVE_NAME = "3p_05d"
 
@@ -89,8 +91,8 @@ def make_data():
     xdot_data = add_noise(xdot_data)
 
     # Test set
-    x_0_test = rng.normal(size=(N_SAMPLES_TEST, N_DIM))
-    xdot_0_test = 1 + rng.normal(size=(N_SAMPLES_TEST, N_DIM))
+    x_0_test = 1 + rng.normal(size=(N_SAMPLES_TEST, N_DIM))
+    xdot_0_test = rng.normal(size=(N_SAMPLES_TEST, N_DIM))
     x_data_test, xdot_data_test, _ = from_ode(data_ode, t_data, x_0_test, xdot_0_test)
     x_data_test = add_noise(x_data_test)
     xdot_data_test = add_noise(xdot_data_test)
@@ -120,6 +122,7 @@ def main():
         init_lr=INIT_LR,
         scheduler_options=LR_SCHEDULER_OPTIONS,
         ode_options={"rtol": 1e-6, "atol": 1e-6, "use_adjoint": False},  # Not really needed here
+        metric_options={"supress_time_dependence": False},
     )
 
     # Evaluate the model on the test set before training
@@ -156,6 +159,9 @@ def main():
     print(f"Test Helmholtz loss: {helmholtz_metric:.2e}")
     print(f"Individual Helmholtz: {individual_helmholtz}")
 
+    if not COMPUTE_ANALYTIC_G:
+        return
+    
     # Evaluate g matrix vs. analytic g matrix
     metric: TryLearnDouglas = model._model._helmholtz_metric  # TODO: Expose this in the API
 
