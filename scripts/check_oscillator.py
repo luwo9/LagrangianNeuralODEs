@@ -24,7 +24,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"  # Much faster on GPU
 G_HIDDEN_LAYER_SIZES = [64] * 2
 BATCH_SIZE = 128
 INIT_LR = 1e-3
-N_EPOCHS = 1000
+N_EPOCHS = 1200
 N_SAMPLES_TRAIN = 6000
 N_SAMPLES_TEST = 12000
 LR_SCHEDULER_OPTIONS = {"factor": 0.5, "patience": 1500, "threshold": 1e-2}
@@ -106,6 +106,14 @@ def make_data():
     )
 
 
+def error_matrix(g_predicted, g_analytic):
+    diff = g_predicted - g_analytic
+    g_analytic_diag = np.diagonal(g_analytic, axis1=-2, axis2=-1)
+    diag_inds = np.diag_indices(2, 2)
+    diff[..., diag_inds[0], diag_inds[1]] /= g_analytic_diag
+    return np.abs(diff)
+
+
 # Main logic
 
 
@@ -148,7 +156,6 @@ def main():
     print("Before training:")
     print(f"Test Helmholtz loss: {helmholtz_metric:.2e}")
     print(f"Individual Helmholtz: {individual_helmholtz}")
-    print("Begin training")
 
     # Evaluate the model on the test set, after training
     t_test_with_batches = np.tile(t_data, (x_data_test.shape[0], 1))
@@ -161,7 +168,7 @@ def main():
 
     if not COMPUTE_ANALYTIC_G:
         return
-    
+
     # Evaluate g matrix vs. analytic g matrix
     metric: TryLearnDouglas = model._model._helmholtz_metric  # TODO: Expose this in the API
 
@@ -203,26 +210,27 @@ def main():
     g_analytic = np.einsum("aij,abij->abij", g_0_learned, np.exp(exponent_analytic))
 
     # Compute errors and plot/print
-    normalized_errors = np.abs(g_analytic - g) / np.mean(np.abs(g_analytic))
-    # np.save(f"pred_analyt_err_{SAVE_NAME}.npy", np.stack((g, g_analytic, normalized_errors), axis=0))
+    error_matrix_ = error_matrix(g, g_analytic)
+    # np.save(f"pred_analyt_err_{SAVE_NAME}.npy", np.stack((g, g_analytic, error_matrix_), axis=0))
 
     print(
-        f"Error results: Mean: {normalized_errors.mean():.2e}, "
-        f"Error results: Median: {np.median(normalized_errors):.2e}, "
-        f"90th percentile: {np.percentile(normalized_errors, 90):.2e}, "
-        f"95th percentile: {np.percentile(normalized_errors, 95):.2e}, "
-        f"80th percentile: {np.percentile(normalized_errors, 80):.2e}, "
-        f"20th percentile: {np.percentile(normalized_errors, 20):.2e}, "
+        f"Mean error matrix: {error_matrix_.mean():.2e}, "
+        f"Median: {np.median(error_matrix_):.2e}, "
+        f"90th percentile: {np.percentile(error_matrix_, 90):.2e}, "
+        f"95th percentile: {np.percentile(error_matrix_, 95):.2e}, "
+        f"80th percentile: {np.percentile(error_matrix_, 80):.2e}, "
+        f"20th percentile: {np.percentile(error_matrix_, 20):.2e}, "
     )
     bins = np.logspace(
-        np.log10(np.clip(np.min(normalized_errors), 1e-8, None)),
-        np.log10(np.max(normalized_errors)),
+        np.log10(np.clip(np.min(error_matrix_), 1e-8, None)),
+        np.log10(np.max(error_matrix_)),
         50,
     )
-    plt.hist(normalized_errors.flatten(), log=True, bins=bins)
+    n_points = len(error_matrix_.flatten())
+    plt.hist(error_matrix_.flatten(), log=False, bins=bins, weights=np.ones(n_points) / n_points)
     plt.xscale("log")
-    plt.xlabel("Absolute Error")
-    plt.ylabel("Count")
+    plt.xlabel(r"Error matrix $\Delta_g$")
+    plt.ylabel("Relative count")
     # plt.savefig(f"error_histogram_{SAVE_NAME}.pdf")
     plt.show()
 

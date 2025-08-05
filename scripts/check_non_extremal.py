@@ -23,10 +23,12 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"  # Much faster on GPU
 G_HIDDEN_LAYER_SIZES = [64] * 2
 BATCH_SIZE = 128
 INIT_LR = 1e-3
-N_EPOCHS = 1000
+N_EPOCHS = 1200
 N_SAMPLES_TRAIN = 6000
 N_SAMPLES_TEST = 1000
 LR_SCHEDULER_OPTIONS = {"factor": 0.5, "patience": 1500, "threshold": 1e-2}
+
+SAVE_NAME = "caseIV"
 
 
 # Chose analytic ODE
@@ -111,10 +113,6 @@ def main():
     helmholtz_metric, individual_helmholtz = model.helmholtzmetric(
         t_test_with_batches, x_data_test, xdot_data_test, individual_metrics=True
     )
-    print("Before training:")
-    print(f"Test Helmholtz loss: {helmholtz_metric:.2e}")
-    print(f"Individual Helmholtz: {individual_helmholtz}")
-    print("Begin training")
 
     # Train the model
     info = model.train(
@@ -125,6 +123,15 @@ def main():
         n_epochs=N_EPOCHS,
         device=DEVICE,
     )
+    # np.save(f"hloss_{SAVE_NAME}.npy", info["helmholtz"])
+    # for key, value in info.items():
+    #     if key != "helmholtz" and key != "error":
+    #         np.save(f"{key}loss_{SAVE_NAME}.npy", value)
+
+    print("Before training:")
+    print(f"Test Helmholtz loss: {helmholtz_metric:.2e}")
+    print(f"Individual Helmholtz: {individual_helmholtz}")
+    print("Begin training")
 
     # Evaluate the model on the test set, after training
     t_test_with_batches = np.tile(t_data, (x_data_test.shape[0], 1))
