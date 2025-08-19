@@ -13,7 +13,7 @@ from .neuralodes import SecondOrderNeuralODE
 
 class SolvedSecondOrderNeuralODE(nn.Module):
     """
-    Abstract class for representing an integrated/solved second order neural ODE.
+    Represents an integrated/solved second order neural ODE.
 
     It solves the initial value problem, such that the state x and its derivative xdot are known
     at any time t given the initial state.

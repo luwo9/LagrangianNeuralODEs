@@ -256,6 +256,7 @@ class KeplerProblem(ODE):
         r\dot{\varphi}^2 - \frac{G M}{r^2} \\
         -\frac{2 \dot{r} \dot{\varphi}}{r}
     \end{pmatrix}
+    $$
 
     Additional Methods
     ------------------
@@ -297,6 +298,11 @@ class KeplerProblem(ODE):
         differ in both semi-major axis and orbital period.
         """
         self._GM = 4 * np.pi**2 * semi_major_axis**3 / orbital_period**2
+        if self._GM < 0:
+            raise ValueError(
+                "Detected negative gravitational parameter GM, perhaps the semi-major"
+                " axis has the wrong sign?"
+            )
 
     def __call__(self, t: np.ndarray, x: np.ndarray, xdot: np.ndarray) -> np.ndarray:
         r = x[:, :, 0]

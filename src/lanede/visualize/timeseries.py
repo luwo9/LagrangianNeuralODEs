@@ -226,11 +226,12 @@ def plot_timeseries(
                     ax.legend(loc="upper right")
 
     # Add text to the left explaining the different series
-    fig.supylabel(
-        r"$\longleftarrow$Different time series$\longrightarrow$",
-        x=-0.05,
-        rotation="vertical",
-        fontweight="bold",
-    )
+    if n_time_series > 1:
+        fig.supylabel(
+            r"$\longleftarrow$Different time series$\longrightarrow$",
+            x=-0.05,
+            rotation="vertical",
+            fontweight="bold",
+        )
 
     return fig, axs
