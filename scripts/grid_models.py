@@ -189,15 +189,15 @@ def train_model(
     t_metric = np.linspace(0, 3, 2000)
     is_extrapol = t_metric > 1
     x_0_metric = 1 + rng.normal(size=(6000, 2)) * x_0_std
-    v_0_metric = np.sqrt(x_0_metric**2) / 10
+    xdot_0_metric = np.sqrt(x_0_metric**2) / 10
 
-    x_0_metric = add_noise(x_0_metric, NOISE_LEVEL_DATA)
-    x_pred, xdot_pred = model.predict(t_metric, x_0_metric)
+    x_0_metric_noise = add_noise(x_0_metric, NOISE_LEVEL_DATA)
+    x_pred, xdot_pred = model.predict(t_metric, x_0_metric_noise)
     t_plot_with_batches = np.tile(t_metric, (x_pred.shape[0], 1))
     xdotdot_pred = model.second_derivative(t_plot_with_batches, x_pred, xdot_pred)
 
     # Get true time series with higher resolution
-    x_true, xdot_true, xdotdot_true = from_ode(oscillator, t_metric, x_0_metric, v_0_metric)
+    x_true, xdot_true, xdotdot_true = from_ode(oscillator, t_metric, x_0_metric, xdot_0_metric)
 
     # Compute MSE
     mse_x_data = np.mean((x_pred[:, ~is_extrapol] - x_true[:, ~is_extrapol]) ** 2)
