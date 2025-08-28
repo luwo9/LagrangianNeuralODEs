@@ -184,48 +184,6 @@ def train_model(
     with open(f"{save_path}/{CONFIG_NAME}.json", "w") as f:
         json.dump(config_dict, f, indent=4)
 
-    # Simple performance metrics
-    # Get high resolution true and model prediction
-    t_metric = np.linspace(0, 3, 2000)
-    is_extrapol = t_metric > 1
-    x_0_metric = 1 + rng.normal(size=(6000, 2)) * x_0_std
-    xdot_0_metric = np.sqrt(x_0_metric**2) / 10
-
-    x_0_metric_noise = add_noise(x_0_metric, NOISE_LEVEL_DATA)
-    x_pred, xdot_pred = model.predict(t_metric, x_0_metric_noise)
-    t_plot_with_batches = np.tile(t_metric, (x_pred.shape[0], 1))
-    xdotdot_pred = model.second_derivative(t_plot_with_batches, x_pred, xdot_pred)
-
-    # Get true time series with higher resolution
-    x_true, xdot_true, xdotdot_true = from_ode(oscillator, t_metric, x_0_metric, xdot_0_metric)
-
-    # Compute MSE
-    mse_x_data = np.mean((x_pred[:, ~is_extrapol] - x_true[:, ~is_extrapol]) ** 2)
-    mse_xdot_data = np.mean((xdot_pred[:, ~is_extrapol] - xdot_true[:, ~is_extrapol]) ** 2)
-    mse_xdotdot_data = np.mean(
-        (xdotdot_pred[:, ~is_extrapol] - xdotdot_true[:, ~is_extrapol]) ** 2
-    )
-
-    mse_x_extrapol = np.mean((x_pred[:, is_extrapol] - x_true[:, is_extrapol]) ** 2)
-    mse_xdot_extrapol = np.mean((xdot_pred[:, is_extrapol] - xdot_true[:, is_extrapol]) ** 2)
-    mse_xdotdot_extrapol = np.mean(
-        (xdotdot_pred[:, is_extrapol] - xdotdot_true[:, is_extrapol]) ** 2
-    )
-
-    metrics = {
-        "mse_x_data": mse_x_data,
-        "mse_xdot_data": mse_xdot_data,
-        "mse_xdotdot_data": mse_xdotdot_data,
-        "mse_x_extrapol": mse_x_extrapol,
-        "mse_xdot_extrapol": mse_xdot_extrapol,
-        "mse_xdotdot_extrapol": mse_xdotdot_extrapol,
-    }
-
-    metric_path = f"{save_path}/metrics"
-    # Stay with strings but use pathlib to create directory
-    pathlib.Path(metric_path).mkdir(exist_ok=True)
-    with open(f"{metric_path}/simple_metrics.json", "w") as f:
-        json.dump(metrics, f, indent=4)
     return end_time - start_time
 
 
