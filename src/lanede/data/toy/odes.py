@@ -364,3 +364,127 @@ class KeplerProblem(ODE):
         xdot_0 = np.stack([rdot_0, phidot_0], axis=-1)
 
         return x_0, xdot_0
+
+
+class FreeFallWithDrag(ODE):
+    r"""
+    A free fall problem with drag force.
+
+    The ODE is given by:
+
+    $$
+    \ddot{x} = -g - \frac{g}{v_\infty^2} \dot{x}|\dot{x}|,
+    $$
+
+    where $g$ is the gravitational acceleration and $v_\infty$ is the
+    terminal velocity.
+    """
+
+    def __init__(self, terminal_velocity: float, g: float):
+        """
+        Set the parameters of the ODE.
+
+        Parameters
+        ----------
+
+        terminal_velocity : float
+            The terminal velocity of the object.
+        g : float
+            The gravitational acceleration.
+        """
+        self._g = g
+        self._drag_coeff = g / terminal_velocity**2
+
+    def __call__(self, t: np.ndarray, x: np.ndarray, xdot: np.ndarray) -> np.ndarray:
+        return -self._g - self._drag_coeff * xdot * np.abs(xdot)
+
+
+class DoublePendulum(ODE):
+    r"""
+    A double pendulum with masses $m_1$ and $m_2$ and lengths $l_1$ and
+    $l_2$. The gravitational acceleration is given by $g$.
+
+    The Lagrangian is given by:
+
+    $$
+    g l_{1} \left(m_{1} + m_{2}\right) \cos{\left(x_{1} \right)} + g
+    l_{2} m_{2} \cos{\left(x_{2} \right)} + \frac{l_{1}^{2}
+    \dot{x}_{1}^{2} \left(m_{1} + m_{2}\right)}{2} + l_{1} l_{2} m_{2}
+    \dot{x}_{1} \dot{x}_{2} \cos{\left(x_{1} - x_{2} \right)} +
+    \frac{l_{2}^{2} m_{2} \dot{x}_{2}^{2}}{2}
+    $$
+
+    The explicit second order ODE is given by:
+
+    $$
+    \begin{pmatrix}
+        \ddot{x}_1 \\
+        \ddot{x}_2
+    \end{pmatrix}
+    =
+    \begin{pmatrix}\frac{- g \left(m_{1} + m_{2}\right) \sin{\left(x_{1}
+    \right)} - l_{2} m_{2} \dot{x}_{2}^{2} \sin{\left(x_{1} - x_{2}
+    \right)} + m_{2} \left(g \sin{\left(x_{2} \right)} - l_{1}
+    \dot{x}_{1}^{2} \sin{\left(x_{1} - x_{2} \right)}\right)
+    \cos{\left(x_{1} - x_{2} \right)}}{l_{1} \left(m_{1} + m_{2}
+    \sin^{2}{\left(x_{1} - x_{2} \right)}\right)}\\ \frac{- \left(m_{1}
+    + m_{2}\right) \left(g \sin{\left(x_{2} \right)} - l_{1}
+    \dot{x}_{1}^{2} \sin{\left(x_{1} - x_{2} \right)}\right) + \left(g
+    \left(m_{1} + m_{2}\right) \sin{\left(x_{1} \right)} + l_{2} m_{2}
+    \dot{x}_{2}^{2} \sin{\left(x_{1} - x_{2} \right)}\right)
+    \cos{\left(x_{1} - x_{2} \right)}}{l_{2} \left(m_{1} + m_{2}
+    \sin^{2}{\left(x_{1} - x_{2} \right)}\right)}\end{pmatrix}.
+    $$
+    """
+
+    def __init__(
+        self, mass_1: float, mass_2: float, length_1: float, length_2: float, g: float = 9.81
+    ):
+        """
+        Set the parameters of the ODE.
+
+        Parameters
+        ----------
+
+        mass_1 : float
+            The mass of the first pendulum.
+        mass_2 : float
+            The mass of the second pendulum.
+        length_1 : float
+            The length of the first pendulum.
+        length_2 : float
+            The length of the second pendulum.
+        g : float, default=9.81
+            The gravitational acceleration.
+        """
+        self._mass_1 = mass_1
+        self._mass_2 = mass_2
+        self._length_1 = length_1
+        self._length_2 = length_2
+        self._g = g
+
+    def __call__(self, t: np.ndarray, x: np.ndarray, xdot: np.ndarray) -> np.ndarray:
+        x_1 = x[:, :, 0]
+        x_2 = x[:, :, 1]
+        xdot_1 = xdot[:, :, 0]
+        xdot_2 = xdot[:, :, 1]
+
+        xdotdot_1 = (
+            -self._g * (self._mass_1 + self._mass_2) * np.sin(x_1)
+            - self._length_2 * self._mass_2 * xdot_2**2 * np.sin(x_1 - x_2)
+            + self._mass_2
+            * (self._g * np.sin(x_2) - self._length_1 * xdot_1**2 * np.sin(x_1 - x_2))
+            * np.cos(x_1 - x_2)
+        ) / (self._length_1 * (self._mass_1 + self._mass_2 * np.sin(x_1 - x_2) ** 2))
+
+        xdotdot_2 = (
+            -(self._mass_1 + self._mass_2)
+            * (self._g * np.sin(x_2) - self._length_1 * xdot_1**2 * np.sin(x_1 - x_2))
+            + (
+                self._g * (self._mass_1 + self._mass_2) * np.sin(x_1)
+                + self._length_2 * self._mass_2 * xdot_2**2 * np.sin(x_1 - x_2)
+            )
+            * np.cos(x_1 - x_2)
+        ) / (self._length_2 * (self._mass_1 + self._mass_2 * np.sin(x_1 - x_2) ** 2))
+
+        return np.stack([xdotdot_1, xdotdot_2], axis=-1)

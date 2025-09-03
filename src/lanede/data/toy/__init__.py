@@ -29,6 +29,8 @@ DampedHarmonicOscillator
 NonExtremalCaseIIIb
 NonExtremalCaseIV
 KeplerProblem
+DoublePendulum
+FreeFallWithDrag
 
 Analytic Neural ODEs
 --------------------
@@ -46,6 +48,8 @@ from .odes import (
     NonExtremalCaseIIIb,
     NonExtremalCaseIV,
     KeplerProblem,
+    DoublePendulum,
+    FreeFallWithDrag,
 )
 from .modify import add_noise
 from .analytic_neuralodes import HarmonicOscillatorODE, CaseIIIbODE, CaseIVODE, KeplerODE
