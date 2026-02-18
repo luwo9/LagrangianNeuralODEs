@@ -21,6 +21,8 @@ from ._lanede_builders import (
     JSONDict,
     example_simple_douglas_only_x,
     simple_douglas_only_x,
+    example_simple_LNN_only_x,
+    simple_LNN_only_x,
 )
 
 # NOTE: Move this to a separate module if it gets too big:
@@ -29,10 +31,12 @@ from ._lanede_builders import (
 # example configurations
 _BUILDERS: dict[str, Callable[[JSONDict], LagrangianNeuralODE]] = {
     "simple_douglas": simple_douglas_only_x,
+    "simple_LNN": simple_LNN_only_x,
 }
 
 EXAMPLES: dict[str, JSONDict] = {
     "simple_douglas": example_simple_douglas_only_x,
+    "simple_LNN": example_simple_LNN_only_x,
 }
 
 
@@ -91,7 +95,7 @@ class LanedeAPI:
         Presets
         -------
 
-        Available presets are: `simple_douglas`.
+        Available presets are: `simple_douglas` and `simple_LNN`.
 
         Fore more information on the pre defined models and their
         configuration dictionaries, see their documentation. For every

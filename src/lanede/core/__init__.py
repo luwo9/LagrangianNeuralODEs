@@ -17,6 +17,7 @@ Neural Networks:
 ----------------
 
 NeuralNetwork
+LNNNeuralNetwork
 
 Neural ODE's:
 ------------
@@ -24,18 +25,20 @@ Neural ODE's:
 SecondOrderNeuralODE (abstract)
 SolvedSecondOrderNeuralODE
 FreeSecondOrderNeuralODE
+EulerLagrangeNeuralODE
 
 Helmholtz Metrics:
 ------------------
 
 HelmholtzMetric (abstract)
 TryLearnDouglas
+DummyHelmholtzMetric
 
 Lagrangian Neural ODE Models:
 -----------------------------
 
 LagrangianNeuralODEModel (abstract)
-SimultaneousLearnedDouglasOnlyX
+SimultaneousLearnedMetricOnlyX
 DouglasOnFixedODE
 
 Lagrangian Neural ODE:
@@ -63,11 +66,15 @@ make_dataloader
 TrainingInfo
 """
 
-from .neural import NeuralNetwork
-from .neuralodes import SecondOrderNeuralODE, FreeSecondOrderNeuralODE
+from .neural import NeuralNetwork, LNNNeuralNetwork
+from .neuralodes import SecondOrderNeuralODE, FreeSecondOrderNeuralODE, EulerLagrangeNeuralODE
 from .integratedodes import SolvedSecondOrderNeuralODE
-from .helmholtzmetrics import HelmholtzMetric, TryLearnDouglas
-from .lanedemodels import LagrangianNeuralODEModel, SimultaneousLearnedDouglasOnlyX, DouglasOnFixedODE
+from .helmholtzmetrics import HelmholtzMetric, TryLearnDouglas, DummyHelmholtzMetric
+from .lanedemodels import (
+    LagrangianNeuralODEModel,
+    SimultaneousLearnedMetricOnlyX,
+    DouglasOnFixedODE,
+)
 from .lanede import LagrangianNeuralODE, make_dataloader
 from .training import train_lagrangian_neural_ode, TrainingInfo
 from .temporal_schedulers import TemporalScheduler, SigmoidTemporalScheduler
@@ -75,13 +82,16 @@ from .normalize import Normalizer, MeanStd, Identity
 
 __all__ = [
     "NeuralNetwork",
+    "LNNNeuralNetwork",
     "SecondOrderNeuralODE",
     "FreeSecondOrderNeuralODE",
+    "EulerLagrangeNeuralODE",
     "SolvedSecondOrderNeuralODE",
     "HelmholtzMetric",
     "TryLearnDouglas",
+    "DummyHelmholtzMetric",
     "LagrangianNeuralODEModel",
-    "SimultaneousLearnedDouglasOnlyX",
+    "SimultaneousLearnedMetricOnlyX",
     "DouglasOnFixedODE",
     "LagrangianNeuralODE",
     "train_lagrangian_neural_ode",

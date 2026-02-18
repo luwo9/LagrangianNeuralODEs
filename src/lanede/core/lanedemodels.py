@@ -12,7 +12,7 @@ import torch.nn as nn
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
 
-from .helmholtzmetrics import TryLearnDouglas
+from .helmholtzmetrics import TryLearnDouglas, HelmholtzMetric
 from .integratedodes import SolvedSecondOrderNeuralODE
 from .neural import NeuralNetwork
 from .temporal_schedulers import TemporalScheduler
@@ -326,15 +326,20 @@ class LagrangianNeuralODEModel(nn.Module, ABC):
         pass
 
 
-class SimultaneousLearnedDouglasOnlyX(LagrangianNeuralODEModel):
+class SimultaneousLearnedMetricOnlyX(LagrangianNeuralODEModel):
     """
-    Uses Douglas based Helmholtz conditions, where the g matrix is
-    learned. The neural ODE and g matrix are learned simultaneously, by
+    This class supports Helmholtz metrics that require training
+    themselves.
+    
+    All three potentially occuring updates (neural ODE based on
+    regression loss, neural ODE based on Helmholtz metric and Helmholtz
+    metric based on Helmholtz metric) are done simultaneously, by
     minimizing a total loss w.r.t. the parameters of both. The total
     loss is given by the weighted sum of the prediction error and the
     metric of the Helmholtz conditions.
+    
     The derivative of the state is not expected to be supplied.
-    Thus the initial value is inferred from the initial state
+    Thus its initial value is inferred from the initial state
     and the prediction error is computed only on the state
     as well.
     """
@@ -342,7 +347,7 @@ class SimultaneousLearnedDouglasOnlyX(LagrangianNeuralODEModel):
     def __init__(
         self,
         neural_ode: SolvedSecondOrderNeuralODE,
-        helmholtz_metric: TryLearnDouglas,
+        helmholtz_metric: HelmholtzMetric,
         xdot_0_network: NeuralNetwork,
         common_optimizer: Optimizer,
         helmholtz_weight: float = 1.0,
@@ -358,8 +363,8 @@ class SimultaneousLearnedDouglasOnlyX(LagrangianNeuralODEModel):
 
         neural_ode : SolvedSecondOrderNeuralODE
             The integrated second order neural ODE to represent the
-            dynamics. See notes.
-        helmholtz_metric : TryLearnDouglas
+            dynamics.
+        helmholtz_metric : HelmholtzMetric
             The metric to use for the Helmholtz conditions.
         xdot_network : NeuralNetwork
             The neural network that predicts the initial condition of
@@ -367,8 +372,9 @@ class SimultaneousLearnedDouglasOnlyX(LagrangianNeuralODEModel):
             map n_dim to n_dim.
         common_optimizer : Optimizer
             The optimizer to be used to update the neural ODE, the
-            Helmholtz metric and the initial condition network.
-            Must be initialized with the parameters of all three.
+            initial condition network and potentially the Helmholtz
+            metric. Must be initialized with the parameters of all
+            three (if the metric has parameters).
         helmholtz_weight : float, default=1e2
             The weight of the Helmholtz metric relative to the
             prediction error in the total loss.
@@ -387,10 +393,6 @@ class SimultaneousLearnedDouglasOnlyX(LagrangianNeuralODEModel):
 
         Notes
         -----
-
-        Since the second order method of the neural ODE is used when
-        computing the Helmholtz metric, its requirements must be met.
-        See `TryLearnDouglas` documentation for more information.
 
         All models are moved to be on the device of the neural ODE.
         """
@@ -493,6 +495,12 @@ class SimultaneousLearnedDouglasOnlyX(LagrangianNeuralODEModel):
         # for an efficiency gain.
         (self._helmholtz_weight * helmholtz_loss).backward()
         # Clip gradients of the Helmholtz metric for stability
+        # TODO: Assess whether this is universally sensible for
+        # Helmholtz metrics or only for TryLearnDouglas. If the latter,
+        # consider moving it to that class.
+        # Also consider making the max norm a hyperparameter. This
+        # could also be used to evaluate the Helmholtz metric of an
+        # unregularized model.
         torch.nn.utils.clip_grad_norm_(self._neural_ode.parameters(), 0.05)
         torch.nn.utils.clip_grad_norm_(self._helmholtz_metric.parameters(), 5)
         regression_loss.backward()
@@ -584,6 +592,7 @@ class SimultaneousLearnedDouglasOnlyX(LagrangianNeuralODEModel):
         f = self._neural_ode.second_order_function
         return self._helmholtz_metric.forward(f, t, x, xdot, scalar, individual_metrics)
 
+    # Maybe move this to a utility function?
     def _get_time_series_fraction(
         self, t: torch.Tensor, x: torch.Tensor | None = None, xdot: torch.Tensor | None = None
     ) -> tuple[torch.Tensor, torch.Tensor | None, torch.Tensor | None]:
@@ -707,7 +716,7 @@ class DouglasOnFixedODE(LagrangianNeuralODEModel):
         Return values are detached from the computation graph.
 
         Not integrating the ODE allows for a huge speedup. If using,
-        e.g., `SimultaneousLearnedDouglasOnlyX`, the metric is
+        e.g., `SimultaneousLearnedMetricOnlyX`, the metric is
         evaluated on the predicted/integrated trajectory. This model
         can still reproduce this behavior: Since the neural ODE is not
         updated, the trajectories may be predicted once and then used

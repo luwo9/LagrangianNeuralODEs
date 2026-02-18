@@ -96,7 +96,7 @@ def fourier_metrics(
         "bandwidth": bandwidth,
         "entropy": entropy,
     }
-    mean_axis = (-2, -1) if average_dims else -2  # -2 for n_steps, -1 for n_dim
+    mean_axis = (-2, -1) if average_dims else -2  # -2 for n_batch, -1 for n_dim
     for key, value in metrics.items():
         metrics[key] = np.mean(value, axis=mean_axis)
 

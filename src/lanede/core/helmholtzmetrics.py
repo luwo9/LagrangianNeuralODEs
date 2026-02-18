@@ -99,6 +99,77 @@ class HelmholtzMetric(nn.Module, ABC):
         pass
 
 
+class DummyHelmholtzMetric(HelmholtzMetric):
+    """
+    A dummy metric that always returns zero. It safes computation time,
+    and is useful if no regularization is desired.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        # Use a dummy tensor to track the device (not the best way, but
+        # works for now)
+        self.register_buffer("_track_device", torch.tensor(0.0))
+
+    def forward(
+        self,
+        f: Callable,
+        t: torch.Tensor,
+        x: torch.Tensor,
+        xdot: torch.Tensor,
+        scalar: bool = True,
+        individual_metrics: bool = False,
+    ) -> torch.Tensor | tuple[torch.Tensor, dict[str, torch.Tensor]]:
+        """
+        Always returns zero as the metric of fullfilment of the
+        Helmholtz conditions for a given second order ODE at given
+        points in time and state.
+
+        The returned tensor has requires_grad=True, such that calling
+        `.backward` on it does not result in an error.
+
+        Parameters
+        ----------
+        f : Callable
+            Ignored.
+        t : torch.Tensor, shape (n_batch, n_steps)
+            Ignored, except for determining the shape of the output if
+            `scalar` is False and the device.
+        x : torch.Tensor, shape (n_batch, n_steps, n_dim)
+            Ignored.
+        xdot : torch.Tensor, shape (n_batch, n_steps, n_dim)
+            Ignored.
+        scalar : bool, default=True
+            Whether to return a single scalar metric or of shape
+            (n_batch, n_steps).
+        individual_metrics : bool, default=False
+            Whether to additionally return individual metrics for each
+            condition. These are also always zero.
+
+        Returns
+        -------
+
+        torch.Tensor, shape scalar or (n_batch, n_steps)
+            The combined metric for the Helmholtz conditions, always
+            zero.
+        dict[str, torch.Tensor], optional, shapes scalar or
+        (n_batch, n_steps)
+            Individual metrics for the Helmholtz conditions. Returned
+            only if `individual_metrics` is True. Contains the key
+            "dummy", which is always zero.
+        """
+        shape = () if scalar else (t.shape[0], t.shape[1])
+        metric = torch.zeros(shape, device=t.device, requires_grad=True)
+        if not individual_metrics:
+            return metric
+        individual_metrics = {"dummy": metric}
+        return metric, individual_metrics
+
+    @property
+    def device(self) -> torch.device:
+        return self._track_device.device
+
+
 class TryLearnDouglas(HelmholtzMetric):
     """
     Uses the Helmholtz conditions after Douglas (see [1]_).
@@ -118,7 +189,7 @@ class TryLearnDouglas(HelmholtzMetric):
     References
     ----------
 
-    Douglas J. (1939). Solution of the Inverse Problem of the Calculus of Variations. Proceedings of the National Academy of Sciences of the United States of America, 25(12), 631-637. https://doi.org/10.1073/pnas.25.12.631
+    .. [1] Douglas J. (1939). Solution of the Inverse Problem of the Calculus of Variations. Proceedings of the National Academy of Sciences of the United States of America, 25(12), 631-637. https://doi.org/10.1073/pnas.25.12.631
     """
 
     def __init__(
@@ -224,7 +295,7 @@ class TryLearnDouglas(HelmholtzMetric):
         The order of the Helmholtz conditions is as usual
         (see `__init__`).
 
-        Internaly torch.func is used, so f should be side-effect free.
+        Internally torch.func is used, so f should be side-effect free.
         See [1]_ for more information.
 
         References
@@ -379,7 +450,7 @@ class TryLearnDouglas(HelmholtzMetric):
 
         # The metrics for the Helmholtz conditions are defined relative
         # to the -2 (operator) norm of the g matrix.
-        
+
         # TODO: Use torch.linalg.eigvalsh and an analytical formula (2D)
         # to get the smallest absolute eigenvalue of g more efficiently.
         epsilon = 1e-6
