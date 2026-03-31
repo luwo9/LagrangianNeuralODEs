@@ -46,10 +46,10 @@ cfg = {
     "learning": {
         "optimizer": "RAdam",
         "lr": 0.07,
-        "sheduler_patience": 2000,
+        "sheduler_patience": 500 * 4 // 2,
         "sheduler_factor": 0.5,
         "sheduler_threshold": 1e-2,
-        "half_time_series_steps": 1200,
+        "half_time_series_steps": 1200 // 3,
     },
     "ode": {
         "Lagrangian_activation_fn": "Softplus",
@@ -96,7 +96,7 @@ def main():
 
     # Train and save
     model = LanedeAPI(name, cfg)
-    model.train(t_data, x_data, n_epochs=400, batch_size=128, device="cpu")
+    model.train(t_data, x_data, n_epochs=200, batch_size=128, device="cpu")
     path = f"saves/{NAME}"
     model.save(path)
 

@@ -180,10 +180,17 @@ class EulerLagrangeNeuralODE(SecondOrderNeuralODE):
     This is basically the implementation of a Lagrangian Neural Network
     (LNN) [1]_ within the Lagrangian neural ODE framework.
 
+    For stabilization, the Lagrangian is given by
+    L(t, x, xdot) = NN(t, x, xdot) + xdot^2.
+    That is, a quadratic kinetic term is added, leading to a more
+    stable initialization and training, as discussed in [2]_ and [3]_.
+
     References
     ----------
 
     .. [1] Cranmer, M., Greydanus, S., Hoyer, S., Battaglia, P., Spergel, D., & Ho, S. (2020). Lagrangian neural networks. arXiv preprint arXiv:2003.04630.
+    .. [2] Hamzaogullari, A. U., & Ozakin, A. (2026). Learning Relativistic Geodesics and Chaotic Dynamics via Stabilized Lagrangian Neural Networks. arXiv preprint arXiv:2601.12519.
+    .. [3] Liu, Z., Wang, B., Meng, Q., Chen, W., Tegmark, M., & Liu, T. Y. (2021). Machine-learning nonconservative dynamics for new-physics detection. Physical Review E, 104(5), 055302.
     """
 
     def __init__(
@@ -297,11 +304,26 @@ class EulerLagrangeNeuralODE(SecondOrderNeuralODE):
         # Compute the second order derivative using the explicit
         # Euler-Lagrange equation
 
-        # Use pseudo inverse as in the LNN paper
-        g_inverse = torch.pinverse(jacobian_vv)
         xdot_term = torch.einsum("abij,abj->abi", jacobian_xv, xdot)
         generalized_force = jacobian_x - xdot_term - jacobian_tv
-        xdotdot = torch.einsum("abij,abj->abi", g_inverse, generalized_force)
+
+        # For numerical stability use solve(A, b) instead of A^{-1} @ b,
+        # i.e. here, xdotdot = solve(jacobian_vv, generalized_force)
+        # instead of xdotdot = jacobian_vv^{-1} @ generalized_force.
+
+        # To use pseudo-inverse like the original LNN paper, use
+        # least squares (linalg.lstsq) instead of solve.
+
+        # Here different drivers can be used, gelsd is chosen here, as
+        # the matrix may not be full rank or well conditioned.
+        # gelsd does not support cuda, but training is likely done on
+        # cpu anyways.
+        # rcond is set to a small value in an attempt to avoid
+        # numerical issues.
+
+        # TODO: Reassess the choice of driver and rcond,
+        # maybe make it configurable.
+        xdotdot = torch.linalg.lstsq(jacobian_vv, generalized_force, rcond=1e-4, driver="gelsd").solution
         return xdotdot
 
     def Lagrangian(self, t: torch.Tensor, x: torch.Tensor, xdot: torch.Tensor) -> torch.Tensor:
@@ -326,5 +348,10 @@ class EulerLagrangeNeuralODE(SecondOrderNeuralODE):
         """
         t = t.unsqueeze(2)
         input_ = self._make_input(t, x, xdot)
+        predicted_Lagrangian = self._neural_network(input_).squeeze(2)
+        # Add quadratic kinetic term for stability, see
+        # https://arxiv.org/abs/2601.12519 and
+        # https://arxiv.org/abs/2106.00026
+        predicted_Lagrangian = predicted_Lagrangian + torch.einsum("abi,abi->ab", xdot, xdot)
         # Output scalar, as compatible with torch.func.jacrev
-        return self._neural_network(input_).squeeze(2)
+        return predicted_Lagrangian

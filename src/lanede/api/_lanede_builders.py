@@ -40,6 +40,7 @@ _activation_fn_map = {
     "Softplus": torch.nn.Softplus,
     "LeakyReLU": torch.nn.LeakyReLU,
     "ELU": torch.nn.ELU,
+    "GELU": torch.nn.GELU,
 }
 
 _optimizer_map = {
@@ -233,7 +234,7 @@ def simple_LNN_only_x(config: JSONDict) -> LagrangianNeuralODE:
     rtol = ode_config["rtol"]
     atol = ode_config["atol"]
     use_adjoint = ode_config["use_adjoint"]
-    ode = SolvedSecondOrderNeuralODE(ode, rtol=rtol, atol=atol, use_adjoint=use_adjoint)
+    ode = SolvedSecondOrderNeuralODE(ode, rtol=rtol, atol=atol, use_adjoint=use_adjoint, options={"max_num_steps":1000*8})
 
     # Assemble helmholtz metric (dummy metric, is expected to be zero,
     # since the ODE is by construction an Euler-Lagrange equation)
@@ -272,6 +273,7 @@ def simple_LNN_only_x(config: JSONDict) -> LagrangianNeuralODE:
         metric,
         initial_net,
         optimizer,
+        helmholtz_weight=0.0,
         lr_scheduler=lr_scheduler,
         temporal_scheduler=temporal_scheduler,
     )

@@ -185,7 +185,7 @@ class LagrangianNeuralODEModel(nn.Module, ABC):
         Some implementations may infer parts of the initial state
         or its derivative.
         """
-        with torch.inference_mode():
+        with torch.no_grad():
             result = self._predict(t, x_0, xdot_0)
         return result
 
@@ -225,7 +225,7 @@ class LagrangianNeuralODEModel(nn.Module, ABC):
         The error may only be defined on part of the state
         or its derivative, thus some of the arguments are optional.
         """
-        with torch.inference_mode():
+        with torch.no_grad():
             result = self._error(t, x_pred, xdot_pred, x_true, xdot_true)
         return result
 
@@ -504,6 +504,8 @@ class SimultaneousLearnedMetricOnlyX(LagrangianNeuralODEModel):
         torch.nn.utils.clip_grad_norm_(self._neural_ode.parameters(), 0.05)
         torch.nn.utils.clip_grad_norm_(self._helmholtz_metric.parameters(), 5)
         regression_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self._neural_ode.parameters(), 1)
+        torch.nn.utils.clip_grad_norm_(self._xdot_network.parameters(), 1)
         self._optimizer.step()
         self._n_train_steps += 1
 
@@ -549,7 +551,7 @@ class SimultaneousLearnedMetricOnlyX(LagrangianNeuralODEModel):
         torch.Tensor, shape (n_batch, n_steps, n_dim)
             The second order derivative of the state.
         """
-        with torch.inference_mode():
+        with torch.no_grad():
             result = self._neural_ode.second_order_function(t, x, xdot)
         return result
 
