@@ -64,7 +64,7 @@ example_simple_douglas_only_x: JSONDict = {
     "explicit_time_dependence_lagrangian": True,
     "learning": {
         "optimizer": "RAdam",
-        "lr": 0.05,
+        "lr": 0.07,
         "sheduler_patience": 2000,
         "sheduler_factor": 0.5,
         "sheduler_threshold": 1e-2,
@@ -72,7 +72,7 @@ example_simple_douglas_only_x: JSONDict = {
     },
     "ode": {
         "activation_fn": "Softplus",
-        "hidden_layer_sizes": [16, 16],
+        "hidden_layer_sizes": [16],
         "rtol": 1e-6,
         "atol": 1e-6,
         "use_adjoint": False,
@@ -84,7 +84,7 @@ example_simple_douglas_only_x: JSONDict = {
         "condition_weights": [1.0, 1.0],
     },
     "initial_net": {
-        "hidden_layer_sizes": [16, 16],
+        "hidden_layer_sizes": [16, 16, 16],
         "activation_fn": "ReLU",
     },
     "normalizer": {
@@ -171,22 +171,22 @@ example_simple_LNN_only_x: JSONDict = {
     "explicit_time_dependence_lagrangian": False,
     "learning": {
         "optimizer": "RAdam",
-        "lr": 0.05,
-        "sheduler_patience": 2000,
+        "lr": 0.07,
+        "sheduler_patience": 1000,
         "sheduler_factor": 0.5,
         "sheduler_threshold": 1e-2,
-        "half_time_series_steps": 1200,
+        "half_time_series_steps": 400,
     },
     "ode": {
         "Lagrangian_activation_fn": "Softplus",
-        "hidden_layer_sizes": [16, 16],
+        "hidden_layer_sizes": [32],
         "rtol": 1e-6,
         "atol": 1e-6,
         "use_adjoint": False,
     },
     "LNN_initialization": True,
     "initial_net": {
-        "hidden_layer_sizes": [16, 16],
+        "hidden_layer_sizes": [16, 16, 16],
         "activation_fn": "ReLU",
     },
     "normalizer": {

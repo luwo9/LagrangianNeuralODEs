@@ -1,27 +1,27 @@
 # Explanation of transforms
 
-Normalization of data for machine learning  is usually very trivial: If, e.g., one scales regression data by a constant or applies a logarithm,
+Normalization of data for machine learning is usually very trivial: If, e.g., one scales regression data by a constant or applies a logarithm,
 one just needs to apply the inverse operation to the output of the neural network. However, for this application, the normalization
 is a bit more complex.
 
-As is included in the code more broadly, one may, e.g., train a second order ODE only by using the loss w.r.t. the state itself.
-In fact, in this case (if the initial value is inferred), one should not be restricted to have data available for the derivative
-of the state. However, when predicting with the model, the derivative is also predicted and one might be interested in it.
+As is included in the framework more broadly, one may, e.g., train a second order ODE only by using the loss w.r.t. the state itself.
+In fact, in this case, one should not be restricted to have data available for the derivative
+of the state (if its initial value is inferred). However, when predicting with the model, the derivative is also predicted and one might be interested in its values.
 
 Now, clearly the transformation of the state $x$ and time $t$ will induce a transformation of the derivative $\dot x=\frac{dx}{dt}$.
 (The neural ode will integrate $\frac{d}{dt}x=\dot x$ to get $x$, which, when computing the loss, is compared to the transformed data, such that $\dot x$ is also transformed.)
 
-As a Consequence of this, one needs to infer the transformation of the derivative, form the transformation of the state and time. This can be done using the chain rule.
+As a Consequence of this, one needs to infer the transformation of the derivative, from the transformation of the state and time. This can be done using the chain rule.
 There are some other requirements the transformations need to fulfill:
 - Allow general transformations (e.g. $x'=x/\cos(t)$)
 - Time must be transformed independently of the state (when predicting, the state is not known yet for the desired time steps to be integrated)
 - Not just infer inverse transformation of $\dot x$, but also "forward" transformation
-    - Needed when computing helmholtz metrics ore directly evaluating the ode to get $\frac{d}{dt}\dot x$, the second derivative
+    - Needed when computing helmholtz metrics or directly evaluating the ODE to get $\frac{d}{dt}\dot x$, the second derivative
 - Infer the inverse transformation of $\frac{d}{dt}\dot x$
 
 For this reason this package comes with custom `Normalizer`'s that do all of this automatically, once the transformation is supplied.
 
-Of course, all of the above equally applies if only the derivative is given and the state is inferred. First however for the case,
+Of course, all of the above equally applies if only the derivative is given and the state is inferred. First however, for the case,
 where the state is given and the derivative is inferred.
 
 ## Inferring from a state transformation
@@ -71,3 +71,5 @@ $$
 \end{align*}
 $$
 where $\frac{d\dot x'}{dt'} = \ddot x'$, the transformed second derivative.
+
+Note also, that it is required for the transformation of the derivative $\dot{x}$, $k$, to coincide with the transformation induced on $\dot{x}$ by the transformation of the state $x$, $j$, i.e., $k=\frac{dj}{dt}$.

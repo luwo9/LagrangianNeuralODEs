@@ -134,6 +134,8 @@ class LanedeAPI:
             Derivative of the state at times t.
         n_epochs : int
             The number of epochs to train the model.
+        batch_size : int, default=32
+            The batch size to use for training.
         device : torch.device or str, default="cpu"
             The device on which to train the model.
         kwargs
