@@ -1,5 +1,6 @@
 """
-Load models, compute performance metrics and plot the time series.
+Load models, compute performance metrics and optionally compare to
+reference models.
 """
 
 from collections import defaultdict
@@ -10,36 +11,28 @@ import numpy as np
 from lanede.api import LanedeAPI
 from lanede.data.toy import from_ode, DampedHarmonicOscillator, add_noise
 from lanede.metrics import fourier_mse, domain_mse
-from lanede.visualize import plot_timeseries
 
 
 # Model names
-# For a given list of models, compute metrics and make plots if
-# desired. Their metrics are averaged with a geometric mean.
+# List of models to compute metrics for. They are averaged with a
+# geometric mean.
 MODEL_NAMES: list[str] = []
-# If a list of reference models is given, plot them as well, compute
-# ratio of metrics instead of absolute values.
+# If a list of reference models is given compute their metrics and
+# yield the ratio of the metrics of the main models to the reference
+# models.
 REFERENCE_MODEL_NAMES: list[str] = []
-DO_PLOT = False
-# Saved as f"{PLOT_PREFIX}{model_name}.pdf"
-PLOT_PREFIX = "plot_"
-# Set to None to only print and not save:
+# Set to None to only print and not save metrics:
 METRIC_OUTPUT_FILE = "model_metrics.json"
-
-N_TIME_STEPS = 7
-# Extrapolation factor for plotting and metrics.
+# Extrapolation factor for extrapolation metrics.
 EXTRAPOLATION_FACTOR = 2
-N_TRAJECTORIES_PLOT = 2
-# If True, plot test set values also for derivatives
-PLOT_DATA_DERIVATIVES = False
 
 
 # Define how to generate data to evaluate the model:
-# Must return (t_test, x_data_test, xdot_data_test, xdotdot_data_test,
-# t_true, x_true, xdot_true, xdotdot_true, ode)
-# Where _test refers to data points of the test set, and _true refers
-# to a high resolution time series for plotting and metrics.
-# ode is the true second order ODE function.
+# Must return (x_data_test_0, t_true, x_true, xdot_true, xdotdot_true,
+# ode)
+# Where x_data_test_0 refers to the initial values for x of test set
+# data points ans _true refers to a high resolution time series for
+# computing the metrics. ode is the true second order ODE function.
 # t_true must be evenly spaced, of sufficiently high resolution and
 # cover the full time span.
 def make_data_and_ode():
@@ -53,28 +46,28 @@ def make_data_and_ode():
     damping_matrix = np.array([[0.0, 0],
                             [0, 0.0]])
     # fmt: on
+    n_time_steps = 7
 
     # Make test data
     rng = np.random.default_rng()
     ode = DampedHarmonicOscillator(spring_matrix, damping_matrix)
-    t_test = np.linspace(0, 1, N_TIME_STEPS)
+    t_test = np.linspace(0, 1, n_time_steps)
     x_0_test = 1 + rng.normal(size=(6000, 2)) / 10
     xdot_0_test = np.sqrt(x_0_test**2) / 10
-    x_data_test, xdot_data_test, xdotdot_data_test = from_ode(ode, t_test, x_0_test, xdot_0_test)
-    # Add noise to test data
-    noise_level = 0.05
-    x_data_test = add_noise(x_data_test, noise_level)
-    xdot_data_test = add_noise(xdot_data_test, noise_level)
-    xdotdot_data_test = add_noise(xdotdot_data_test, noise_level)
 
-    # Get a high resolution true time series for plotting and metrics
+    # Predict full test time series data points, eventhough it is not
+    # needed directly. This is done as x_data_test_0 here uses the
+    # noisy initial values, where the size of added noise depends on
+    # the (mean abs value of) the full trajectory
+    x_data_test, *_ = from_ode(ode, t_test, x_0_test, xdot_0_test)
+    noise_level = 0.05
+    x_data_test_0 = add_noise(x_data_test, noise_level)[:, 0, :]
+
+    # Get a high resolution true time series for computing the metrics
     t_true = np.linspace(0, 1.0 * EXTRAPOLATION_FACTOR, 1000)
     x_true, xdot_true, xdotdot_true = from_ode(ode, t_true, x_0_test, xdot_0_test)
     return (
-        t_test,
-        x_data_test,
-        xdot_data_test,
-        xdotdot_data_test,
+        x_data_test_0,
         t_true,
         x_true,
         xdot_true,
@@ -84,12 +77,9 @@ def make_data_and_ode():
 
 
 # Main logic of the script:
-def compute_metrics_and_plot(model_name: str):
+def compute_metrics_for_model(model_name: str):
     (
-        t_test,
-        x_data_test,
-        xdot_data_test,
-        xdotdot_data_test,
+        x_data_test_0,
         t_true,
         x_true,
         xdot_true,
@@ -100,25 +90,9 @@ def compute_metrics_and_plot(model_name: str):
     model = LanedeAPI.load(f"saves/{model_name}")
 
     # Predict the modeled system evolution
-    x_pred, xdot_pred = model.predict(t_true, x_data_test[:, 0, :])
+    x_pred, xdot_pred = model.predict(t_true, x_data_test_0)
     t_true_with_batches = np.tile(t_true, (x_pred.shape[0], 1))
     xdotdot_pred = model.second_derivative(t_true_with_batches, x_pred, xdot_pred)
-
-    # Plot
-    if not PLOT_DATA_DERIVATIVES:
-        xdot_data_test = None
-        xdotdot_data_test = None
-
-    if DO_PLOT:
-        pred = (t_true, x_pred, xdot_pred, xdotdot_pred)
-        data = (t_test, x_data_test, xdot_data_test, xdotdot_data_test)
-        true = (t_true, x_true, xdot_true, xdotdot_true)
-
-        fig, _ = plot_timeseries(
-            predictions=pred, data=data, true=true, n_random=N_TRAJECTORIES_PLOT
-        )
-
-        fig.savefig(f"{PLOT_PREFIX}{model_name}.pdf")
 
     # Metrics
     t_interp_max = t_true[-1] / EXTRAPOLATION_FACTOR
@@ -199,7 +173,11 @@ def compute_metrics_and_plot(model_name: str):
     return all_metrics
 
 
-def get_metrics():
+def geometric_mean(array):
+    return np.exp(np.mean(np.log(array)))
+
+
+def get_all_metrics():
     # Evaluate metrics for all models
     metrics_models = defaultdict(list)
     metrics_reference_models = defaultdict(list)
@@ -208,7 +186,7 @@ def get_metrics():
     for model_group, metric_dict in zip(models, metric_dicts):
         for model_name in model_group:
             print(f"Processing model {model_name}...")
-            metrics = compute_metrics_and_plot(model_name)
+            metrics = compute_metrics_for_model(model_name)
             for k, v in metrics.items():
                 metric_dict[k].append(v)
 
@@ -220,8 +198,12 @@ def get_metrics():
     for k in metrics_models.keys():
         model_values = np.array(metrics_models[k])
         reference_values = np.array(metrics_reference_models[k])
-        ratios = model_values / reference_values
-        ratios_mean = np.exp(np.mean(np.log(ratios)))
+        # Average metrics first, to allow different lengths of model
+        # and reference groups. Mathematically, the ratio of geometric
+        # means is equal to the geometric mean of the ratios.
+        model_means = geometric_mean(model_values)
+        reference_means = geometric_mean(reference_values)
+        ratios_mean = model_means / reference_means
         metric_ratios[k] = float(ratios_mean)
 
     metric_ratios_sorted = dict(sorted(metric_ratios.items(), key=lambda x: x[1]))
@@ -229,10 +211,10 @@ def get_metrics():
 
 
 def main():
-    metrics = get_metrics()
+    metrics = get_all_metrics()
     for k, v in metrics.items():
         print(f"{k}: {v:.2g}")
-    print(f"Overall: {np.exp(np.mean(np.log(list(metrics.values())))):.2g}")
+    print(f"Overall: {geometric_mean(list(metrics.values())):.2g}")
     if METRIC_OUTPUT_FILE is None:
         return
 
